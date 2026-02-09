@@ -42,9 +42,17 @@ CREW_LIST_EXAMPLE: Dict[str, Any] = {
             "crewId": 15,
             "profile": {"url": "https://cdn.aolda.io/profiles/crew-15.jpg"},
             "crewName": "김서현",
-            "cLevelLog": [
-                {"generation": 3, "type": "CREW_ROLE/P"},
-                {"generation": 4, "type": "CREW_ROLE/VP"},
+            "crewLog": [
+                {
+                    "generation": 3,
+                    "type": "CREW_ROLE/P",
+                    "department": "DEPARTMENT_TYPE/CLEVEL",
+                },
+                {
+                    "generation": 4,
+                    "type": "CREW_ROLE/VP",
+                    "department": "DEPARTMENT_TYPE/CLEVEL",
+                },
             ],
             "isActive": True,
             "joinedGen": 3,
@@ -86,9 +94,17 @@ CREW_DETAIL_EXAMPLE: Dict[str, Any] = {
     "crewId": 15,
     "profile": {"url": "https://cdn.aolda.io/profiles/crew-15.jpg"},
     "crewName": "김서현",
-    "cLevelLog": [
-        {"generation": 3, "type": "CREW_ROLE/P"},
-        {"generation": 4, "type": "CREW_ROLE/VP"},
+    "crewLog": [
+        {
+            "generation": 3,
+            "type": "CREW_ROLE/P",
+            "department": "DEPARTMENT_TYPE/CLEVEL",
+        },
+        {
+            "generation": 4,
+            "type": "CREW_ROLE/VP",
+            "department": "DEPARTMENT_TYPE/CLEVEL",
+        },
     ],
     "isActive": True,
     "joinedGen": 3,
@@ -228,8 +244,26 @@ PROJECT_DETAIL_EXAMPLE: Dict[str, Any] = {
     },
     "contents": {
         "ideaBackground": "문제 정의부터 사용자 리서치 결과까지 정리했습니다.\n\n현재 수집 파이프라인의 병목을 해결하기 위해 개선안을 도출했습니다.",
-        "asIs": "데이터 적재 지연으로 학습 주기가 길었습니다.\n\n파이프라인 자동화가 부족해 운영 비용이 높았습니다.",
-        "toBe": "ETL 자동화를 통해 학습 주기를 단축합니다.\n\n모니터링과 알림을 강화해 운영 비용을 절감합니다.",
+        "activityInfo": {
+            "startedAt": ["2024-2", "2025-1"],
+            "projectType": "PROJECT_TYPE/IN_HOUSE",
+            "activityCounts": 6,
+            "bloggingCounts": 3,
+        },
+        "mainBloggings": [
+            {
+                "title": "모델 학습 파이프라인 구축기",
+                "createdBy": {"crewId": 15, "crewName": "김서현"},
+                "postedAt": "2025-01-10 11:40:00",
+                "contentPreview": "데이터 수집부터 학습 자동화까지의 과정을 정리했습니다.",
+            },
+            {
+                "title": "운영비용 최적화 회고",
+                "createdBy": {"crewId": 22, "crewName": "박지훈"},
+                "postedAt": "2025-01-25 18:05:30",
+                "contentPreview": "리소스 최적화로 비용을 절감한 사례를 공유합니다.",
+            },
+        ],
     },
     "participants": [
         {
