@@ -6,6 +6,35 @@ from fastapi import APIRouter
 router = APIRouter(prefix="/team", tags=["team"])
 
 
+ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
+    400: {
+        "description": "Bad Request",
+        "content": {"application/json": {"example": {"code": "ERR_INVALID_REQUEST"}}},
+    },
+    403: {
+        "description": "Forbidden",
+        "content": {
+            "application/json": {"example": {"code": "ERR_ACTIVITY_ACCESS_DENIED"}}
+        },
+    },
+    404: {
+        "description": "Not Found",
+        "content": {"application/json": {"example": {"code": "ERR_USER_NOT_FOUND"}}},
+    },
+}
+
+SERVICE_UNAVAILABLE_EXAMPLES: Dict[str, Any] = {
+    "description": "Service Unavailable",
+    "content": {
+        "application/json": {
+            "examples": {
+                "external": {"value": {"code": "ERR_EXT_REQ_FAILED"}},
+                "database": {"value": {"code": "ERR_DB_REQ_FAILED"}},
+            }
+        }
+    },
+}
+
 CREW_LIST_EXAMPLE: Dict[str, Any] = {
     "total": 10,
     "data": [
@@ -242,7 +271,11 @@ PROJECT_DETAIL_EXAMPLE: Dict[str, Any] = {
         200: {
             "description": "OK",
             "content": {"application/json": {"example": CREW_LIST_EXAMPLE}},
-        }
+        },
+        503: {
+            "description": "Service Unavailable",
+            "content": {"application/json": {"example": {"code": "ERR_EXT_REQ_FAILED"}}},
+        },
     },
 )
 def get_crew_list() -> Dict[str, Any]:
@@ -256,7 +289,11 @@ def get_crew_list() -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": ACTIVITY_LIST_EXAMPLE}},
-        }
+        },
+        503: {
+            "description": "Service Unavailable",
+            "content": {"application/json": {"example": {"code": "ERR_EXT_REQ_FAILED"}}},
+        },
     },
 )
 def get_activity_list() -> Dict[str, Any]:
@@ -270,7 +307,9 @@ def get_activity_list() -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": CREW_DETAIL_EXAMPLE}},
-        }
+        },
+        404: ERROR_RESPONSES[404],
+        503: SERVICE_UNAVAILABLE_EXAMPLES,
     },
 )
 def get_crew_detail(crew_id: int) -> Dict[str, Any]:
@@ -284,7 +323,10 @@ def get_crew_detail(crew_id: int) -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": PROJECT_LIST_EXAMPLE}},
-        }
+        },
+        400: ERROR_RESPONSES[400],
+        404: ERROR_RESPONSES[404],
+        503: SERVICE_UNAVAILABLE_EXAMPLES,
     },
 )
 def get_project_list() -> Dict[str, Any]:
@@ -298,7 +340,10 @@ def get_project_list() -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": PROJECT_DETAIL_EXAMPLE}},
-        }
+        },
+        403: ERROR_RESPONSES[403],
+        404: ERROR_RESPONSES[404],
+        503: SERVICE_UNAVAILABLE_EXAMPLES,
     },
 )
 def get_project_detail(project_id: int) -> Dict[str, Any]:

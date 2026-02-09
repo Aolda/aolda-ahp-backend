@@ -6,6 +6,31 @@ from fastapi import APIRouter
 router = APIRouter(prefix="/cloud", tags=["cloud"])
 
 
+ERROR_RESPONSES: Dict[int, Dict[str, Any]] = {
+    400: {
+        "description": "Bad Request",
+        "content": {"application/json": {"example": {"code": "ERR_INVALID_REQUEST"}}},
+    },
+    404: {
+        "description": "Not Found",
+        "content": {
+            "application/json": {"example": {"code": "ERR_NOTICE_NOT_FOUND"}}
+        },
+    },
+}
+
+SERVICE_UNAVAILABLE_EXAMPLES: Dict[str, Any] = {
+    "description": "Service Unavailable",
+    "content": {
+        "application/json": {
+            "examples": {
+                "external": {"value": {"code": "ERR_EXT_REQ_FAILED"}},
+                "database": {"value": {"code": "ERR_DB_REQ_FAILED"}},
+            }
+        }
+    },
+}
+
 BRIEF_EXAMPLE: Dict[str, Any] = {
     "userCount": {"value": 12540, "unit": "명"},
     "projectCount": {"value": 312, "unit": "개"},
@@ -182,7 +207,11 @@ PRODUCT_DETAIL_EXAMPLE: Dict[str, Any] = {
         200: {
             "description": "OK",
             "content": {"application/json": {"example": BRIEF_EXAMPLE}},
-        }
+        },
+        503: {
+            "description": "Service Unavailable",
+            "content": {"application/json": {"example": {"code": "ERR_EXT_REQ_FAILED"}}},
+        },
     },
 )
 def get_brief() -> Dict[str, Any]:
@@ -196,7 +225,8 @@ def get_brief() -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": USE_PROJECT_EXAMPLE}},
-        }
+        },
+        503: SERVICE_UNAVAILABLE_EXAMPLES,
     },
 )
 def get_use_project_list() -> Dict[str, Any]:
@@ -210,7 +240,8 @@ def get_use_project_list() -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": FAQ_LIST_EXAMPLE}},
-        }
+        },
+        503: SERVICE_UNAVAILABLE_EXAMPLES,
     },
 )
 def get_faq_list() -> Dict[str, Any]:
@@ -224,7 +255,12 @@ def get_faq_list() -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": NOTICE_LIST_EXAMPLE}},
-        }
+        },
+        400: ERROR_RESPONSES[400],
+        503: {
+            "description": "Service Unavailable",
+            "content": {"application/json": {"example": {"code": "ERR_DB_REQ_FAILED"}}},
+        },
     },
 )
 def get_notice_list() -> Dict[str, Any]:
@@ -238,7 +274,13 @@ def get_notice_list() -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": NOTICE_DETAIL_EXAMPLE}},
-        }
+        },
+        400: ERROR_RESPONSES[400],
+        404: ERROR_RESPONSES[404],
+        503: {
+            "description": "Service Unavailable",
+            "content": {"application/json": {"example": {"code": "ERR_DB_REQ_FAILED"}}},
+        },
     },
 )
 def get_notice_detail(notice_id: int) -> Dict[str, Any]:
@@ -252,7 +294,8 @@ def get_notice_detail(notice_id: int) -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": PRODUCT_LIST_EXAMPLE}},
-        }
+        },
+        503: SERVICE_UNAVAILABLE_EXAMPLES,
     },
 )
 def get_product_list() -> Dict[str, Any]:
@@ -266,7 +309,13 @@ def get_product_list() -> Dict[str, Any]:
         200: {
             "description": "OK",
             "content": {"application/json": {"example": PRODUCT_DETAIL_EXAMPLE}},
-        }
+        },
+        400: ERROR_RESPONSES[400],
+        404: ERROR_RESPONSES[404],
+        503: {
+            "description": "Service Unavailable",
+            "content": {"application/json": {"example": {"code": "ERR_DB_REQ_FAILED"}}},
+        },
     },
 )
 def get_product_detail(product_id: int) -> Dict[str, Any]:
