@@ -27,15 +27,21 @@ npm run start
 ```
 
 ## CORS 환경변수
-- `CORS_ALLOW_ORIGINS`: 허용 Origin 목록(쉼표 구분)
-- `CORS_ALLOW_METHODS`: 허용 Method 목록(쉼표 구분)
-- `CORS_ALLOW_HEADERS`: 허용 Header 목록(쉼표 구분)
-- `CORS_ALLOW_CREDENTIALS`: credential 허용 여부(`true`/`false`)
+- `CORS_ALLOW_ORIGINS`: 허용 Origin 목록(쉼표 구분, 예: `http://localhost:3000,http://localhost:5173`)
+- `CORS_ALLOW_METHODS`: 허용 Method 목록(쉼표 구분, 기본값 `*`)
+- `CORS_ALLOW_HEADERS`: 허용 Header 목록(쉼표 구분, 기본값 `*`)
+- `CORS_ALLOW_CREDENTIALS`: credential 허용 여부(`true`/`false`, 기본값 `true`)
 
 예시:
 ```bash
-CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173 uvicorn app.main:app --reload
+CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173 \\
+CORS_ALLOW_METHODS=GET,POST,OPTIONS \\
+CORS_ALLOW_HEADERS=Content-Type,Authorization \\
+CORS_ALLOW_CREDENTIALS=true \\
+npm run dev
 ```
+
+서버 시작 시 허용 가능한 CORS env 키 목록과 적용된 CORS 값을 로그로 출력합니다.
 
 ## Swagger
 - UI: `/docs`
