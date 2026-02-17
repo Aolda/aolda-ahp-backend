@@ -12,3 +12,7 @@ venv/
 .idea/
 .vscode/
 .DS_Store
+
+dist/
+node_modules/
+build/
