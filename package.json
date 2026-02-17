@@ -1,0 +1,25 @@
+{
+  "name": "aolda-ahp-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Aolda AHP backend (TypeScript/Fastify)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fastify/swagger": "^8.15.0",
+    "@fastify/swagger-ui": "^1.10.2",
+    "fastify": "^4.29.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.57",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.3"
+  }
+}

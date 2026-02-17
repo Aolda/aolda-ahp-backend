@@ -1,11 +1,29 @@
 # aolda-ahp-backend
 
-FastAPI 기반 백엔드 프로젝트 스캐폴딩입니다.
+TypeScript + Fastify 기반 백엔드 프로젝트입니다.
 
-## 실행
+## Requirements
+- Node.js 20 LTS 이상
+- npm
+
+## 설치
 ```bash
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+npm install
+```
+
+## 개발 실행
+```bash
+npm run dev
+```
+
+## 빌드
+```bash
+npm run build
+```
+
+## 프로덕션 실행
+```bash
+npm run start
 ```
 
 ## CORS 환경변수
@@ -20,4 +38,7 @@ CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173 uvicorn app.main:
 ```
 
 ## Swagger
-브라우저에서 `/docs` 경로로 접속하면 Swagger UI를 사용할 수 있습니다.
+- UI: `/docs`
+- OpenAPI JSON: `/openapi.json`
+
+기본 포트는 `8001`입니다.
