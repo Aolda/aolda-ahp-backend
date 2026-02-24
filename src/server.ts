@@ -3,6 +3,17 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 
+import { ALLOWED_ENV_KEYS, readAppEnv } from './common/config/env';
+import { CloudMockRepository } from './modules/cloud/datasources/cloud-mock.repository';
+import { CloudPrismaRepository } from './modules/cloud/datasources/cloud-prisma.repository';
+import { CloudQueryService } from './modules/cloud/services/cloud-query.service';
+import { InternalExampleMockRepository } from './modules/internal-example/datasources/internal-example-mock.repository';
+import { InternalExamplePrismaRepository } from './modules/internal-example/datasources/internal-example-prisma.repository';
+import { registerInternalExampleRoutes } from './modules/internal-example/routes/internal-example.route';
+import { InternalExampleService } from './modules/internal-example/services/internal-example.service';
+import { TeamMockRepository } from './modules/team/datasources/team-mock.repository';
+import { TeamPrismaRepository } from './modules/team/datasources/team-prisma.repository';
+import { TeamQueryService } from './modules/team/services/team-query.service';
 import { registerCloudRoutes } from './routes/cloud';
 import { registerHealthRoutes } from './routes/health';
 import { registerTeamRoutes } from './routes/team';
@@ -11,59 +22,33 @@ const PROJECT_NAME = 'aolda-ahp-backend';
 const VERSION = '0.1.0';
 const DEFAULT_PORT = 8001;
 
-const DEFAULT_CORS_ALLOW_ORIGINS = [
-  'http://example.com',
-  'https://example.com',
-  'http://localhost:3000',
-  'http://localhost:8000',
-];
-
-function parseCsvEnv(name: string, fallback: string[]): string[] {
-  const value = process.env[name];
-  if (!value) {
-    return fallback;
-  }
-
-  const parsed = value
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-
-  return parsed.length > 0 ? parsed : fallback;
+function createTeamQueryService(useMockData: boolean): TeamQueryService {
+  const repository = useMockData ? new TeamMockRepository() : new TeamPrismaRepository();
+  return new TeamQueryService(repository);
 }
 
-function parseBoolEnv(name: string, fallback: boolean): boolean {
-  const value = process.env[name];
-  if (value === undefined) {
-    return fallback;
-  }
-
-  return ['1', 'true', 't', 'yes', 'y', 'on'].includes(value.trim().toLowerCase());
+function createCloudQueryService(useMockData: boolean): CloudQueryService {
+  const repository = useMockData ? new CloudMockRepository() : new CloudPrismaRepository();
+  return new CloudQueryService(repository);
 }
 
-function readCorsConfig() {
-  const origins = parseCsvEnv('CORS_ALLOW_ORIGINS', DEFAULT_CORS_ALLOW_ORIGINS);
-  const methods = parseCsvEnv('CORS_ALLOW_METHODS', ['*']);
-  const headers = parseCsvEnv('CORS_ALLOW_HEADERS', ['*']);
-  const credentials = parseBoolEnv('CORS_ALLOW_CREDENTIALS', true);
+function createInternalExampleService(useMockData: boolean): InternalExampleService {
+  const repository = useMockData
+    ? new InternalExampleMockRepository()
+    : new InternalExamplePrismaRepository();
 
-  return {
-    origins,
-    methods,
-    headers,
-    credentials,
-  };
+  return new InternalExampleService(repository);
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
+  const env = readAppEnv();
   const app = Fastify({ logger: true, disableRequestLogging: true });
-  const corsConfig = readCorsConfig();
 
   await app.register(cors, {
-    origin: corsConfig.origins.includes('*') ? true : corsConfig.origins,
-    methods: corsConfig.methods,
-    allowedHeaders: corsConfig.headers,
-    credentials: corsConfig.credentials,
+    origin: env.cors.origins.includes('*') ? true : env.cors.origins,
+    methods: env.cors.methods,
+    allowedHeaders: env.cors.headers,
+    credentials: env.cors.credentials,
   });
 
   await app.register(swagger, {
@@ -87,24 +72,33 @@ export async function buildApp(): Promise<FastifyInstance> {
     app.log.info(`${request.ip} <- "${request.method} ${request.url}" ${reply.statusCode}`);
   });
 
+  const teamQueryService = createTeamQueryService(env.useMockData);
+  const cloudQueryService = createCloudQueryService(env.useMockData);
+  const internalExampleService = createInternalExampleService(env.useMockData);
+
   await registerHealthRoutes(app);
-  await registerTeamRoutes(app);
-  await registerCloudRoutes(app);
+  await registerTeamRoutes(app, { teamQueryService });
+  await registerCloudRoutes(app, { cloudQueryService });
+
+  if (env.nodeEnv === 'development') {
+    await registerInternalExampleRoutes(app, { internalExampleService });
+  }
 
   app.get('/openapi.json', async () => app.swagger());
 
   app.addHook('onReady', async () => {
-    app.log.info(
-      'Allowed CORS env keys: CORS_ALLOW_ORIGINS, CORS_ALLOW_METHODS, CORS_ALLOW_HEADERS, CORS_ALLOW_CREDENTIALS',
-    );
+    app.log.info(`Allowed env keys: ${ALLOWED_ENV_KEYS.join(', ')}`);
     app.log.info(
       {
-        CORS_ALLOW_ORIGINS: corsConfig.origins,
-        CORS_ALLOW_METHODS: corsConfig.methods,
-        CORS_ALLOW_HEADERS: corsConfig.headers,
-        CORS_ALLOW_CREDENTIALS: corsConfig.credentials,
+        NODE_ENV: env.nodeEnv,
+        USE_MOCK_DATA: env.useMockData,
+        DATABASE_URL: env.databaseUrl ? '<set>' : '<unset>',
+        CORS_ALLOW_ORIGINS: env.cors.origins,
+        CORS_ALLOW_METHODS: env.cors.methods,
+        CORS_ALLOW_HEADERS: env.cors.headers,
+        CORS_ALLOW_CREDENTIALS: env.cors.credentials,
       },
-      'Applied CORS env values',
+      'Applied env values',
     );
   });
 

@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 
 import {
   ACTIVITY_LIST_EXAMPLE,
@@ -8,8 +8,15 @@ import {
   PROJECT_LIST_EXAMPLE,
 } from '../constants/team';
 import { errorSchema, serviceUnavailableSchema, successSchema } from '../constants/schemas';
+import { TeamQueryService } from '../modules/team/services/team-query.service';
 
-export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
+interface TeamRouteDeps {
+  teamQueryService: TeamQueryService;
+}
+
+export async function registerTeamRoutes(app: FastifyInstance, deps: TeamRouteDeps): Promise<void> {
+  const { teamQueryService } = deps;
+
   app.get(
     '/team/crew',
     {
@@ -22,7 +29,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => CREW_LIST_EXAMPLE,
+    async () => teamQueryService.getCrewList(),
   );
 
   app.get(
@@ -37,7 +44,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => ACTIVITY_LIST_EXAMPLE,
+    async () => teamQueryService.getActivityList(),
   );
 
   app.get(
@@ -53,7 +60,8 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => CREW_DETAIL_EXAMPLE,
+    async (request: FastifyRequest<{ Params: { crew_id: string } }>) =>
+      teamQueryService.getCrewDetail(request.params.crew_id),
   );
 
   app.get(
@@ -70,7 +78,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => PROJECT_LIST_EXAMPLE,
+    async () => teamQueryService.getProjectList(),
   );
 
   app.get(
@@ -87,6 +95,7 @@ export async function registerTeamRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => PROJECT_DETAIL_EXAMPLE,
+    async (request: FastifyRequest<{ Params: { project_id: string } }>) =>
+      teamQueryService.getProjectDetail(request.params.project_id),
   );
 }

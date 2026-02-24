@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 
 import {
   BRIEF_EXAMPLE,
@@ -10,8 +10,15 @@ import {
   USE_PROJECT_EXAMPLE,
 } from '../constants/cloud';
 import { errorSchema, serviceUnavailableSchema, successSchema } from '../constants/schemas';
+import { CloudQueryService } from '../modules/cloud/services/cloud-query.service';
 
-export async function registerCloudRoutes(app: FastifyInstance): Promise<void> {
+interface CloudRouteDeps {
+  cloudQueryService: CloudQueryService;
+}
+
+export async function registerCloudRoutes(app: FastifyInstance, deps: CloudRouteDeps): Promise<void> {
+  const { cloudQueryService } = deps;
+
   app.get(
     '/cloud/brief',
     {
@@ -24,7 +31,7 @@ export async function registerCloudRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => BRIEF_EXAMPLE,
+    async () => cloudQueryService.getBrief(),
   );
 
   app.get(
@@ -39,7 +46,7 @@ export async function registerCloudRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => USE_PROJECT_EXAMPLE,
+    async () => cloudQueryService.getUseProjectList(),
   );
 
   app.get(
@@ -54,7 +61,7 @@ export async function registerCloudRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => FAQ_LIST_EXAMPLE,
+    async () => cloudQueryService.getFaqList(),
   );
 
   app.get(
@@ -70,7 +77,7 @@ export async function registerCloudRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => NOTICE_LIST_EXAMPLE,
+    async () => cloudQueryService.getNoticeList(),
   );
 
   app.get(
@@ -87,7 +94,8 @@ export async function registerCloudRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => NOTICE_DETAIL_EXAMPLE,
+    async (request: FastifyRequest<{ Params: { notice_id: string } }>) =>
+      cloudQueryService.getNoticeDetail(request.params.notice_id),
   );
 
   app.get(
@@ -102,7 +110,7 @@ export async function registerCloudRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => PRODUCT_LIST_EXAMPLE,
+    async () => cloudQueryService.getProductList(),
   );
 
   app.get(
@@ -119,6 +127,7 @@ export async function registerCloudRoutes(app: FastifyInstance): Promise<void> {
         },
       } as any,
     },
-    async () => PRODUCT_DETAIL_EXAMPLE,
+    async (request: FastifyRequest<{ Params: { product_id: string } }>) =>
+      cloudQueryService.getProductDetail(request.params.product_id),
   );
 }

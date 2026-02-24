@@ -1,50 +1,212 @@
 # aolda-ahp-backend
 
-TypeScript + Fastify 기반 백엔드 프로젝트입니다.
+이 프로젝트는 `team`, `cloud`, `health` 공개 API를 제공하는 **TypeScript + Fastify 백엔드**입니다.
+현재는 실제 DB 연동을 넣기 전이므로, 기존 응답을 유지하면서 비즈니스 로직을 추가할 수 있는 구조로 설계되어 있습니다.
 
-## Requirements
-- Node.js 20 LTS 이상
-- npm
+## 이 문서를 보는 초보자용 가이드
 
-## 설치
+프로젝트를 처음 열었을 때, 어떤 파일이 무엇을 하는지 한 번에 이해할 수 있도록 작성했습니다.
+아래 그림은 요청이 서버에서 처리되는 순서를 보여줍니다.
+
+```text
+사용자 요청
+  └─> Route(API 엔드포인트)
+        └─> Service(유스케이스/비즈니스 규칙)
+              └─> Repository(데이터 접근 계약)
+                    └─> Datasource(Mock 또는 Prisma)
+                          └─> 응답 반환
+```
+
+## 1) 프로젝트 구조를 먼저 이해하기
+
+`src/` 루트는 아래와 같이 역할별로 나뉩니다.
+
+```text
+src/
+  common/
+    config/
+      env.ts
+  constants/
+    team.ts
+    cloud.ts
+    schemas.ts
+  routes/
+    health.ts
+    team.ts
+    cloud.ts
+  modules/
+    team/
+      services/
+      repositories/
+      datasources/
+    cloud/
+      services/
+      repositories/
+      datasources/
+    internal-example/
+      routes/
+      services/
+      repositories/
+      datasources/
+  server.ts
+prisma/
+  schema.prisma
+```
+
+- `README`에서 문서가 길어지는 대신, 실제 동작을 기준으로 파일을 읽으면 이해가 빠릅니다.
+- 공개 API는 `routes`에 선언되어 있고, 실제 동작은 `modules`에서 처리됩니다.
+
+## 2) 폴더 역할 (한 줄로 요약)
+
+- `src/server.ts`
+  - 앱을 생성하고, 플러그인(CORS, Swagger), 라우트 등록, 환경변수 로깅을 담당합니다.
+- `src/routes/*`
+  - HTTP 요청을 받아 문서화(Swagger)하고, Service를 호출해 결과를 반환합니다.
+  - 이곳은 DB/API 직접 접근을 하지 않습니다.
+- `src/modules/<도메인>/services/*`
+  - `팀 조회`, `클라우드 조회` 같은 업무 규칙이 배치될 장소입니다.
+  - 현재는 Repository 호출만 래핑하고, 향후 정책/검증 로직을 넣을 예정입니다.
+- `src/modules/<도메인>/repositories/*`
+  - 데이터 조회 계약(인터페이스)입니다.
+  - Service는 이 계약만 알면 되고, 실제 구현체는 바뀌어도 서비스는 영향이 적습니다.
+- `src/modules/<도메인>/datasources/*`
+  - `mock`은 현재 더미 데이터를 반환합니다.
+  - `prisma`는 나중에 실제 DB 조회로 교체할 수 있는 준비부입니다.
+- `prisma/schema.prisma`
+  - Prisma 스키마 파일입니다.
+  - 현재는 최소 예시 모델만 두고, 도메인 모델은 추후 확장용으로 남겨두었습니다.
+- `src/constants/*`
+  - 현재 공개 API 응답 형식(오탈자 키 포함)을 보존하기 위한 고정 예시 데이터/스키마입니다.
+
+## 3) 왜 `team`/`cloud` 구조가 분리되었는가?
+
+현재 공개 API는 바뀌면 안 됩니다. 하지만 내부 구현은 바뀌어야 합니다.
+이때 바로가기에 필요한 구조입니다.
+
+- 공개 API 호환성은 `routes`와 `constants` 응답 샘플 기준으로 유지됩니다.
+- 실제 데이터 소스는 `datasource`만 바꾸면 되도록 계층을 분리했습니다.
+- `USE_MOCK_DATA`를 통해 공개 응답 유지 상태에서 점진적으로 전환 가능합니다.
+
+## 4) 공개 API 목록
+
+### Team
+- `GET /team/crew`
+- `GET /team/activity`
+- `GET /team/crew/:crew_id`
+- `GET /team/project`
+- `GET /team/project/:project_id`
+
+### Cloud
+- `GET /cloud/brief`
+- `GET /cloud/use_project`
+- `GET /cloud/qna`
+- `GET /cloud/notice`
+- `GET /cloud/notice/:notice_id`
+- `GET /cloud/product`
+- `GET /cloud/product/:product_id`
+
+### Health
+- `GET /health`
+
+### 내부 학습용(개발 전용)
+- `GET /internal/example/architecture-check`
+- `NODE_ENV=development`일 때만 노출됩니다.
+
+## 5) 처음 실행하기 (초심자용)
+
+- Node.js: `20.x`
+- npm 설치
+
 ```bash
 npm install
 ```
 
-## 개발 실행
+### 개발 실행
 ```bash
 npm run dev
 ```
 
-## 빌드
+### 타입 체크
+```bash
+npm run typecheck
+```
+
+### 빌드
 ```bash
 npm run build
 ```
 
-## 프로덕션 실행
+### 실행
 ```bash
 npm run start
 ```
 
-## CORS 환경변수
-- `CORS_ALLOW_ORIGINS`: 허용 Origin 목록(쉼표 구분, 예: `http://localhost:3000,http://localhost:5173`)
-- `CORS_ALLOW_METHODS`: 허용 Method 목록(쉼표 구분, 기본값 `*`)
-- `CORS_ALLOW_HEADERS`: 허용 Header 목록(쉼표 구분, 기본값 `*`)
-- `CORS_ALLOW_CREDENTIALS`: credential 허용 여부(`true`/`false`, 기본값 `true`)
+기본 포트: `8001`
+
+```text
+사용 가능한 엔드포인트
+http://localhost:8001/docs
+http://localhost:8001/openapi.json
+```
+
+## 6) 환경변수 가이드
+
+### 공통 환경
+- `NODE_ENV`
+  - `development`면 내부 예시 API가 노출됩니다.
+- `CORS_ALLOW_ORIGINS`
+  - 쉼표 구분 문자열
+- `CORS_ALLOW_METHODS`
+- `CORS_ALLOW_HEADERS`
+- `CORS_ALLOW_CREDENTIALS`
+- `USE_MOCK_DATA`
+  - `true`: mock datasource 사용(기본)
+  - `false`: prisma datasource 사용(현재는 동일 더미 반환)
+- `DATABASE_URL`
+  - Prisma 연동용 DB 연결 문자열
 
 예시:
 ```bash
-CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173 \\
-CORS_ALLOW_METHODS=GET,POST,OPTIONS \\
-CORS_ALLOW_HEADERS=Content-Type,Authorization \\
-CORS_ALLOW_CREDENTIALS=true \\
+NODE_ENV=development \
+USE_MOCK_DATA=true \
+CORS_ALLOW_ORIGINS=http://localhost:3000,http://localhost:5173 \
+CORS_ALLOW_METHODS=GET,POST,OPTIONS \
+CORS_ALLOW_HEADERS=Content-Type,Authorization \
+CORS_ALLOW_CREDENTIALS=true \
 npm run dev
 ```
 
-서버 시작 시 허용 가능한 CORS env 키 목록과 적용된 CORS 값을 로그로 출력합니다.
+모든 Origin 허용(개발 편의):
+```bash
+CORS_ALLOW_ORIGINS=* npm run dev
+```
 
-## Swagger
-- UI: `/docs`
-- OpenAPI JSON: `/openapi.json`
+시작 시 로그로 다음이 출력됩니다.
+- 허용된 env 키 목록
+- 실제 적용된 env 값
 
-기본 포트는 `8001`입니다.
+## 7) Prisma(준비 상태)
+
+현재는 준비 단계이므로 최소 예시 모델만 존재합니다.
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate:dev
+npm run prisma:studio
+```
+
+## 8) 신규 API/로직 추가 방법
+
+1. `repositories`에서 인터페이스를 정의합니다.
+2. `datasources`에 mock/prisma 구현체를 추가합니다.
+3. `services`에서 비즈니스 규칙을 작성합니다.
+4. `routes`에서 엔드포인트와 Swagger 응답 형식을 등록합니다.
+5. `server.ts`에서 사용할 datasource와 서비스를 연결합니다.
+6. `typecheck`와 `build`로 타입/컴파일만 먼저 통과시킵니다.
+
+## 9) 실무에서 꼭 지켜야 할 점
+
+- 공개 API 응답 키는 문서 기준으로 그대로 유지하세요.
+  - 현재 코드에는 오탈자 키(예: `attatchments`, `RECRIUTING`, `__________`)가 실제 응답 규칙의 일부로 들어가 있습니다.
+- 내부 로직을 확장할 때는 바로 `datasource`만 교체하는 방식으로 접근 범위를 좁히세요.
+- 새 구조를 이해하려면 먼저 `server.ts -> routes -> services -> repositories -> datasources` 순으로 추적하면 전체 흐름이 보입니다.
