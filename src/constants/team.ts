@@ -36,6 +36,7 @@ export const ACTIVITY_LIST_EXAMPLE = {
       activityNames: {
         ko: '캡스톤 프로젝트 A',
         en: 'Capstone Project A',
+        brief: '캡스톤A',
       },
       activityType: 'ACTIVITY_TYPE/PROJECT',
       description: '실사용자를 위한 서비스 개선을 목표로 진행한 프로젝트입니다.',
@@ -46,6 +47,7 @@ export const ACTIVITY_LIST_EXAMPLE = {
       activityNames: {
         ko: '리액트 스터디',
         en: 'React Study',
+        brief: 'React',
       },
       activityType: 'ACTIVITY_TYPE/STUDY',
       description: '기초부터 심화까지 단계별로 학습하는 프론트엔드 스터디입니다.',
@@ -83,6 +85,7 @@ export const CREW_DETAIL_EXAMPLE = {
       activityNames: {
         ko: '캡스톤 프로젝트 A',
         en: 'Capstone Project A',
+        brief: '캡스톤A',
       },
       activityType: 'ACTIVITY_TYPE/PROJECT',
       description: '사용자 리서치를 바탕으로 신규 기능을 설계하고 구현했습니다.',
@@ -94,6 +97,7 @@ export const CREW_DETAIL_EXAMPLE = {
       activityNames: {
         ko: '리액트 스터디',
         en: 'React Study',
+        brief: 'React',
       },
       activityType: 'ACTIVITY_TYPE/STUDY',
       description: '기초 문법부터 실전 프로젝트까지 학습한 스터디입니다.',
@@ -173,24 +177,30 @@ export const PROJECT_LIST_EXAMPLE = {
         activityId: 3,
         status: 'ACTIVITY_TYPE/RECRIUTING',
         startedAt: '2025-1',
+        participantsCount: 22,
         activityNames: {
           ko: 'AI 학습 파이프라인 구축',
           en: 'AI Training Pipeline',
+          brief: 'AI 파이프',
         },
-        backgroundImage: {
+        background: {
           url: 'https://cdn.aolda.io/projects/bg-3.jpg',
+          color: '#1E3A8A',
         },
       },
       {
         activityId: 5,
         status: 'ACTIVITY_TYPE/ONBOARDING',
         startedAt: '2024-2',
+        participantsCount: 18,
         activityNames: {
           ko: '클라우드 비용 최적화',
           en: 'Cloud Cost Optimization',
+          brief: 'Cloud Opt',
         },
-        backgroundImage: {
+        background: {
           url: 'https://cdn.aolda.io/projects/bg-5.jpg',
+          color: '#0F766E',
         },
       },
     ],
@@ -201,9 +211,11 @@ export const PROJECT_DETAIL_EXAMPLE = {
   activityNames: {
     ko: 'AI 학습 파이프라인 구축',
     en: 'AI Training Pipeline',
+    brief: 'AI 파이프',
   },
-  backgroundImage: {
+  background: {
     url: 'https://cdn.aolda.io/projects/bg-3.jpg',
+    color: '#334155',
   },
   contents: {
     ideaBackground:
