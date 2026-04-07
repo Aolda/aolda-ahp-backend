@@ -6,6 +6,8 @@ export const ALLOWED_ENV_KEYS = [
   'CORS_ALLOW_METHODS',
   'CORS_ALLOW_HEADERS',
   'CORS_ALLOW_CREDENTIALS',
+  'NOTION_API_KEY',
+  'NOTION_TEAM_DB_IDS',
 ] as const;
 
 const DEFAULT_CORS_ALLOW_ORIGINS = [
@@ -36,6 +38,22 @@ function parseBoolEnv(value: string | undefined, fallback: boolean): boolean {
   return ['1', 'true', 't', 'yes', 'y', 'on'].includes(value.trim().toLowerCase());
 }
 
+function parseKVEnv(
+  value: string | undefined,
+  fallback: Record<string, string>,
+): Record<string, string> {
+  if (!value) return fallback;
+  const result: Record<string, string> = {};
+  for (const token of value.split(',')) {
+    const colonIdx = token.trim().indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = token.trim().slice(0, colonIdx).trim();
+    const val = token.trim().slice(colonIdx + 1).trim();
+    if (key && val) result[key] = val;
+  }
+  return Object.keys(result).length > 0 ? result : fallback;
+}
+
 export interface AppEnv {
   nodeEnv: string;
   useMockData: boolean;
@@ -46,9 +64,19 @@ export interface AppEnv {
     headers: string[];
     credentials: boolean;
   };
+  notion: {
+    apiKey?: string;
+    teamDbIds: {
+      crew?: string;
+      activity?: string;
+      project?: string;
+    };
+  };
 }
 
 export function readAppEnv(): AppEnv {
+  const rawTeamDbIds = parseKVEnv(process.env.NOTION_TEAM_DB_IDS, {});
+
   return {
     nodeEnv: process.env.NODE_ENV ?? 'development',
     useMockData: parseBoolEnv(process.env.USE_MOCK_DATA, true),
@@ -58,6 +86,14 @@ export function readAppEnv(): AppEnv {
       methods: parseCsvEnv(process.env.CORS_ALLOW_METHODS, ['*']),
       headers: parseCsvEnv(process.env.CORS_ALLOW_HEADERS, ['*']),
       credentials: parseBoolEnv(process.env.CORS_ALLOW_CREDENTIALS, true),
+    },
+    notion: {
+      apiKey: process.env.NOTION_API_KEY,
+      teamDbIds: {
+        crew: rawTeamDbIds['crew'],
+        activity: rawTeamDbIds['activity'],
+        project: rawTeamDbIds['project'],
+      },
     },
   };
 }
