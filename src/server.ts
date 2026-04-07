@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 
-import { ALLOWED_ENV_KEYS, readAppEnv } from './common/config/env';
+import { ALLOWED_ENV_KEYS, AppEnv, readAppEnv } from './common/config/env';
 import { CloudMockRepository } from './modules/cloud/datasources/cloud-mock.repository';
 import { CloudPrismaRepository } from './modules/cloud/datasources/cloud-prisma.repository';
 import { CloudQueryService } from './modules/cloud/services/cloud-query.service';
@@ -12,8 +12,10 @@ import { InternalExamplePrismaRepository } from './modules/internal-example/data
 import { registerInternalExampleRoutes } from './modules/internal-example/routes/internal-example.route';
 import { InternalExampleService } from './modules/internal-example/services/internal-example.service';
 import { TeamMockRepository } from './modules/team/datasources/team-mock.repository';
-import { TeamPrismaRepository } from './modules/team/datasources/team-prisma.repository';
+import { TeamRealRepository } from './modules/team/datasources/team-real.repository';
+import { TeamRepository } from './modules/team/repositories/team.repository';
 import { TeamQueryService } from './modules/team/services/team-query.service';
+import { createNotionClient } from './util/notion/client';
 import { registerCloudRoutes } from './routes/cloud';
 import { registerHealthRoutes } from './routes/health';
 import { registerTeamRoutes } from './routes/team';
@@ -22,8 +24,21 @@ const PROJECT_NAME = 'aolda-ahp-backend';
 const VERSION = '0.1.0';
 const DEFAULT_PORT = 8001;
 
-function createTeamQueryService(useMockData: boolean): TeamQueryService {
-  const repository = useMockData ? new TeamMockRepository() : new TeamPrismaRepository();
+function createTeamQueryService(env: AppEnv): TeamQueryService {
+  let repository: TeamRepository;
+
+  if (env.useMockData) {
+    repository = new TeamMockRepository();
+  } else {
+    if (!env.notion.apiKey) {
+      throw new Error('NOTION_API_KEY must be set when USE_MOCK_DATA=false');
+    }
+    repository = new TeamRealRepository({
+      notionClient: createNotionClient(env.notion.apiKey),
+      notionTeamDbIds: env.notion.teamDbIds,
+    });
+  }
+
   return new TeamQueryService(repository);
 }
 
@@ -72,7 +87,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     app.log.info(`${request.ip} <- "${request.method} ${request.url}" ${reply.statusCode}`);
   });
 
-  const teamQueryService = createTeamQueryService(env.useMockData);
+  const teamQueryService = createTeamQueryService(env);
   const cloudQueryService = createCloudQueryService(env.useMockData);
   const internalExampleService = createInternalExampleService(env.useMockData);
 
@@ -93,6 +108,12 @@ export async function buildApp(): Promise<FastifyInstance> {
         NODE_ENV: env.nodeEnv,
         USE_MOCK_DATA: env.useMockData,
         DATABASE_URL: env.databaseUrl ? '<set>' : '<unset>',
+        NOTION_API_KEY: env.notion.apiKey ? '<set>' : '<unset>',
+        NOTION_TEAM_DB_IDS: {
+          crew: env.notion.teamDbIds.crew ?? '<unset>',
+          activity: env.notion.teamDbIds.activity ?? '<unset>',
+          project: env.notion.teamDbIds.project ?? '<unset>',
+        },
         CORS_ALLOW_ORIGINS: env.cors.origins,
         CORS_ALLOW_METHODS: env.cors.methods,
         CORS_ALLOW_HEADERS: env.cors.headers,
