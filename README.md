@@ -92,6 +92,7 @@ prisma/
 - `src/modules/team/notion/assemblers/*`
   - parser/fetcher 결과를 최종 REST 응답 형태로 조립합니다.
   - 이 계층은 응답 shape를 알지만, 직접 외부 API를 호출하지 않습니다.
+  - `crew`의 경우 repository가 여러 source와 supplement를 aggregate로 묶고, assembler가 그 aggregate를 응답 DTO로 변환합니다.
 - `prisma/schema.prisma`
   - Prisma 스키마 파일입니다.
   - 현재는 최소 예시 모델만 두고, 도메인 모델은 추후 확장용으로 남겨두었습니다.
@@ -117,6 +118,7 @@ prisma/
 - `parser`는 raw Notion 객체를 도메인 친화적인 값으로 해석합니다.
 - `assembler`는 최종 REST 응답을 조립합니다.
 - `repository`는 여러 fetch 결과를 조합해 하나의 조회 흐름을 만듭니다.
+- `repository`는 cross-source 값이나 아직 미연동된 값의 mock supplement도 이 단계에서 관리합니다.
 
 예를 들어 `GET /team/crew`는 다음과 같은 흐름으로 읽으면 됩니다.
 
@@ -126,6 +128,7 @@ route/team.ts
   -> TeamRealRepository
   -> CrewFetcher
   -> crew-page.extractor / notion-block.extractor
+  -> repository aggregate composition
   -> crew-response.assembler
 ```
 
