@@ -82,7 +82,7 @@ prisma/
 - `src/modules/team/notion/fetchers/*`
   - Notion SDK 호출만 담당합니다.
   - `dataSources.query`, `blocks.children.list` 같은 I/O를 이 계층에 둡니다.
-  - 현재 `CrewFetcher`는 기존 DTO 반환 메서드와 함께, `page + profileImageUrl + description` 같은 raw source 반환 메서드로 점진 전환 중입니다.
+  - `CrewFetcher`는 `page + profileImageUrl + description` 같은 raw source만 반환합니다.
 - `src/modules/team/notion/extractors/*`
   - 이미 조회한 `page`/`block`에서 필요한 값을 읽는 순수 함수 계층입니다.
   - 네트워크 호출 없이 입력값만 받아 결과를 반환합니다.
@@ -146,7 +146,7 @@ route/team.ts
 현재 실제 호출스택은 아래처럼 이해하면 가장 정확합니다.
 
 - `GET /team/crew`
-  - `route -> service -> TeamRealRepository -> CrewFetcher -> extractors -> crew-response.assembler`
+  - `route -> service -> TeamRealRepository -> CrewFetcher(raw sources) -> extractors -> repository aggregate composition -> crew-response.assembler`
 - `GET /team/activity`
   - `route -> service -> TeamRealRepository -> ActivityFetcher -> activity-page.parser -> activity-response.assembler`
 - `GET /team/project`
