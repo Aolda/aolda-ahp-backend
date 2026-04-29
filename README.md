@@ -2,6 +2,7 @@
 
 이 프로젝트는 `team`, `cloud`, `health` 공개 API를 제공하는 **TypeScript + Fastify 백엔드**입니다.
 현재는 실제 DB 연동을 넣기 전이므로, 기존 응답을 유지하면서 비즈니스 로직을 추가할 수 있는 구조로 설계되어 있습니다.
+특히 `team` 모듈은 Notion을 원천 데이터소스로 사용하면서, 조회 로직과 데이터 해석 로직을 분리하는 방향으로 리팩터링 중입니다.
 
 ## 이 문서를 보는 초보자용 가이드
 
@@ -12,9 +13,10 @@
 사용자 요청
   └─> Route(API 엔드포인트)
         └─> Service(유스케이스/비즈니스 규칙)
-              └─> Repository(데이터 접근 계약)
-                    └─> Datasource(Mock 또는 Prisma)
-                          └─> 응답 반환
+              └─> Repository(조회 시나리오 조합)
+                    └─> Fetcher(외부 API / DB 호출)
+                          └─> Extractor(순수 함수 기반 값 추출)
+                                └─> 응답 반환
 ```
 
 ## 1) 프로젝트 구조를 먼저 이해하기
@@ -39,6 +41,10 @@ src/
       services/
       repositories/
       datasources/
+      notion/
+        fetchers/
+        extractors/
+        mappers/
     cloud/
       services/
       repositories/
@@ -72,6 +78,12 @@ prisma/
 - `src/modules/<도메인>/datasources/*`
   - `mock`은 현재 더미 데이터를 반환합니다.
   - `prisma`는 나중에 실제 DB 조회로 교체할 수 있는 준비부입니다.
+- `src/modules/team/notion/fetchers/*`
+  - Notion SDK 호출만 담당합니다.
+  - `dataSources.query`, `blocks.children.list` 같은 I/O를 이 계층에 둡니다.
+- `src/modules/team/notion/extractors/*`
+  - 이미 조회한 `page`/`block`에서 필요한 값을 읽는 순수 함수 계층입니다.
+  - 네트워크 호출 없이 입력값만 받아 결과를 반환합니다.
 - `prisma/schema.prisma`
   - Prisma 스키마 파일입니다.
   - 현재는 최소 예시 모델만 두고, 도메인 모델은 추후 확장용으로 남겨두었습니다.
@@ -86,6 +98,25 @@ prisma/
 - 공개 API 호환성은 `routes`와 `constants` 응답 샘플 기준으로 유지됩니다.
 - 실제 데이터 소스는 `datasource`만 바꾸면 되도록 계층을 분리했습니다.
 - `USE_MOCK_DATA`를 통해 공개 응답 유지 상태에서 점진적으로 전환 가능합니다.
+
+## 3-1) Team Notion 리팩터링 방향
+
+현재 `team` 모듈은 아래 방향으로 구조를 정리하고 있습니다.
+
+- `fetcher`는 Notion API를 호출합니다.
+- `extractor`는 Notion page/block에서 필요한 값을 읽습니다.
+- `repository`는 여러 fetch 결과를 조합해 하나의 조회 흐름을 만듭니다.
+- 최종 응답 포맷 조립은 별도 계층으로 점진적으로 분리할 예정입니다.
+
+예를 들어 `GET /team/crew`는 다음과 같은 흐름으로 읽으면 됩니다.
+
+```text
+route/team.ts
+  -> TeamQueryService
+  -> TeamRealRepository
+  -> CrewFetcher
+  -> crew-page.extractor / notion-block.extractor
+```
 
 ## 4) 공개 API 목록
 
