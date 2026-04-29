@@ -15,7 +15,6 @@ import {
 import { assembleProjectListResponse } from '../notion/assemblers/project-response.assembler';
 import { ActivityFetcher } from '../notion/fetchers/activity.fetcher';
 import { CrewFetcher } from '../notion/fetchers/crew.fetcher';
-import { ProjectFetcher } from '../notion/fetchers/project.fetcher';
 
 interface TeamRealDbConfig {
   notionClient: Client;
@@ -25,16 +24,13 @@ interface TeamRealDbConfig {
 export class TeamRealRepository implements TeamRepository {
   private readonly crewFetcher: CrewFetcher;
   private readonly activityFetcher: ActivityFetcher;
-  private readonly projectFetcher: ProjectFetcher;
 
   constructor({ notionClient, notionTeamDbIds }: TeamRealDbConfig) {
     if (!notionTeamDbIds.crew) throw new Error('NOTION_TEAM_DB_IDS must include crew:<id>');
     if (!notionTeamDbIds.activity) throw new Error('NOTION_TEAM_DB_IDS must include activity:<id>');
-    if (!notionTeamDbIds.project) throw new Error('NOTION_TEAM_DB_IDS must include project:<id>');
 
     this.crewFetcher = new CrewFetcher(notionClient, notionTeamDbIds.crew);
     this.activityFetcher = new ActivityFetcher(notionClient, notionTeamDbIds.activity);
-    this.projectFetcher = new ProjectFetcher(notionClient, notionTeamDbIds.project);
   }
 
   async getCrewList(): Promise<CrewListResponse> {
@@ -53,13 +49,13 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   async getProjectList(): Promise<ProjectListResponse> {
-    // 프로젝트 목록은 activity 원천 데이터 중 ACTIVITY_TYPE/PROJECT만 필터링해 구성합니다.
+    // 프로젝트 목록은 별도 project 데이터소스가 아니라 activity 원천 데이터에서 파생합니다.
     const pages = await this.activityFetcher.fetchAll();
     return assembleProjectListResponse(pages);
   }
 
   async getProjectDetail(_projectId: string): Promise<ProjectDetailResponse> {
-    // TODO: 단건 조회 — Notion DB filter 또는 Prisma 쿼리로 구현 예정
+    // TODO: 단건 조회 구현 시 project 전용 datasource 또는 relation 기반 fetcher를 다시 도입합니다.
     throw new Error('Not implemented: TeamRealRepository.getProjectDetail');
   }
 }

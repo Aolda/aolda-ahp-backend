@@ -138,6 +138,17 @@ route/team.ts
   -> activity-response.assembler or project-response.assembler
 ```
 
+현재 실제 호출스택은 아래처럼 이해하면 가장 정확합니다.
+
+- `GET /team/crew`
+  - `route -> service -> TeamRealRepository -> CrewFetcher -> extractors -> crew-response.assembler`
+- `GET /team/activity`
+  - `route -> service -> TeamRealRepository -> ActivityFetcher -> activity-page.parser -> activity-response.assembler`
+- `GET /team/project`
+  - `route -> service -> TeamRealRepository -> ActivityFetcher -> activity-page.parser -> project-response.assembler`
+
+즉 현재 `project list`는 별도 Notion project datasource를 직접 읽지 않고, activity datasource에서 `ACTIVITY_TYPE/PROJECT`로 판별된 항목만 추려 구성합니다.
+
 ## 4) 공개 API 목록
 
 ### Team
@@ -215,6 +226,12 @@ http://localhost:8001/openapi.json
   - `false`: prisma datasource 사용(현재는 동일 더미 반환)
 - `DATABASE_URL`
   - Prisma 연동용 DB 연결 문자열
+- `NOTION_API_KEY`
+  - Notion API 호출용 integration secret
+- `NOTION_TEAM_DB_IDS`
+  - `crew:<id>,activity:<id>,project:<id>` 형식의 key-value 문자열
+  - 현재 구현 기준 필수값은 `crew`, `activity`입니다.
+  - `project`는 향후 project detail 구현용 예약 키로 보고 있으며, 현 시점의 project list 호출에는 사용하지 않습니다.
 
 예시:
 ```bash
