@@ -14,27 +14,23 @@ const STATUS_NAME_MAP: Record<string, ActivityListItem['status']> = {
 
 const DUMMY_STATUS = 'ACTIVITY_STATUS/DUMMY_NOT_MAPPED_YET';
 const DUMMY_ACTIVITY_TYPE = 'ACTIVITY_TYPE/DUMMY_NOT_FETCHED_YET';
-const DUMMY_DESCRIPTION = 'DUMMY_ACTIVITY_DESCRIPTION_NOT_FETCHED_YET';
-const DUMMY_BACKGROUND_URL = 'https://dummy.aolda.local/activities/background-not-fetched-yet.jpg';
-const DUMMY_BACKGROUND_COLOR = '#000000';
+export interface ParsedActivityPage {
+  koName: string;
+  status: ActivityListItem['status'];
+  startedAt: string;
+  activityType: ActivityListItem['activityType'];
+  backgroundImageUrl: string | null;
+  participantsCount: number;
+}
 
-export function parseActivityPage(page: PageObjectResponse): ActivityListItem {
-  const koName = extractActivityName(page);
-
+export function parseActivityPage(page: PageObjectResponse): ParsedActivityPage {
   return {
+    koName: extractActivityName(page),
     status: extractActivityStatus(page),
     startedAt: extractStartedAt(page),
-    activityNames: {
-      ko: koName,
-      // TODO(mock): 영문 activity 이름은 현재 _pages 응답만으로 확정 불가하여 mock 값입니다.
-      en: `DUMMY_EN_NAME_FOR_${sanitizeForMockKey(koName)}`,
-      // TODO(mock): brief 이름은 현재 _pages 응답만으로 확정 불가하여 mock 값입니다.
-      brief: `DUMMY_BRIEF_FOR_${sanitizeForMockKey(koName)}`,
-    },
-    background: extractBackground(page),
     activityType: extractActivityType(page),
-    // TODO(mock): description은 page 본문 block 미조회 상태라 mock 값입니다.
-    description: DUMMY_DESCRIPTION,
+    backgroundImageUrl: extractBackgroundImageUrl(page),
+    participantsCount: extractParticipantsCount(page),
   };
 }
 
@@ -62,7 +58,7 @@ function extractStartedAt(page: PageObjectResponse): string {
   return formatSemester(rawDate);
 }
 
-function extractBackground(page: PageObjectResponse): ActivityListItem['background'] {
+function extractBackgroundImageUrl(page: PageObjectResponse): string | null {
   const cover = page.cover as
     | {
         type: 'external';
@@ -74,16 +70,7 @@ function extractBackground(page: PageObjectResponse): ActivityListItem['backgrou
       }
     | null;
 
-  return {
-    // TODO(mock): page cover가 없으면 background 이미지는 mock URL을 사용합니다.
-    url: cover
-      ? cover.type === 'external'
-        ? cover.external.url
-        : cover.file.url
-      : DUMMY_BACKGROUND_URL,
-    // TODO(mock): background color는 현재 _pages 응답만으로 판별 불가하여 mock 값입니다.
-    color: DUMMY_BACKGROUND_COLOR,
-  };
+  return cover ? (cover.type === 'external' ? cover.external.url : cover.file.url) : null;
 }
 
 function extractActivityType(page: PageObjectResponse): ActivityListItem['activityType'] {
@@ -114,6 +101,25 @@ function formatSemester(rawDate: string | null | undefined): string {
   const month = parsed.getUTCMonth() + 1;
   const semester = month <= 6 ? 1 : 2;
   return `${parsed.getUTCFullYear()}-${semester}`;
+}
+
+function extractParticipantsCount(page: PageObjectResponse): number {
+  const participantsProperty = page.properties['참여자'] as
+    | {
+        people?: Array<unknown>;
+        relation?: Array<unknown>;
+      }
+    | undefined;
+
+  if (Array.isArray(participantsProperty?.people)) {
+    return participantsProperty.people.length;
+  }
+
+  if (Array.isArray(participantsProperty?.relation)) {
+    return participantsProperty.relation.length;
+  }
+
+  return 0;
 }
 
 function sanitizeForMockKey(value: string): string {

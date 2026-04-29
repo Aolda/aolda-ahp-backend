@@ -1,67 +1,35 @@
-import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints/common';
 import type { ProjectListResponse } from '../../repositories/team.repository';
-import { parseActivityPage } from '../parsers/activity-page.parser';
+import type { ActivityAggregate } from '../types/activity-aggregate';
 
 type ProjectItem = ProjectListResponse['data']['projects'][number];
 type StatusFilter = { key: string; value: string };
 type SeasonFilter = { key: string; value: string };
 
-export function assembleProjectListResponse(pages: PageObjectResponse[]): ProjectListResponse {
-  const projectActivities = pages
-    .map((page, index) => ({ page, index, activity: parseActivityPage(page) }))
-    .filter(({ activity }) => activity.activityType === 'ACTIVITY_TYPE/PROJECT');
-
-  const projects = projectActivities.map(({ page, index, activity }) =>
-    buildProjectItem(page, index, activity),
-  );
+export function assembleProjectListResponse(projects: ActivityAggregate[]): ProjectListResponse {
+  const projectItems = projects.map((project) => buildProjectItem(project));
 
   return {
-    total: projects.length,
+    total: projectItems.length,
     data: {
-      statistics: buildStatistics(projects),
+      statistics: buildStatistics(projectItems),
       filters: {
-        status: buildStatusFilters(projects),
-        seasons: buildSeasonFilters(projects),
+        status: buildStatusFilters(projectItems),
+        seasons: buildSeasonFilters(projectItems),
       },
-      projects,
+      projects: projectItems,
     },
   };
 }
 
-function buildProjectItem(
-  page: PageObjectResponse,
-  index: number,
-  activity: ReturnType<typeof parseActivityPage>,
-): ProjectItem {
+function buildProjectItem(activity: ActivityAggregate): ProjectItem {
   return {
-    // TODO(mock): Notion page id -> API activityId 매핑 규칙이 아직 없어 임시 순번을 사용합니다.
-    activityId: index + 1,
+    activityId: activity.activityId,
     status: activity.status,
     startedAt: activity.startedAt,
-    participantsCount: extractParticipantsCount(page),
+    participantsCount: activity.participantsCount,
     activityNames: activity.activityNames,
     background: activity.background,
   };
-}
-
-function extractParticipantsCount(page: PageObjectResponse): number {
-  const participantsProperty = page.properties['참여자'] as
-    | {
-        people?: Array<unknown>;
-        relation?: Array<unknown>;
-      }
-    | undefined;
-
-  if (Array.isArray(participantsProperty?.people)) {
-    return participantsProperty.people.length;
-  }
-
-  if (Array.isArray(participantsProperty?.relation)) {
-    return participantsProperty.relation.length;
-  }
-
-  // TODO(mock): 참여자 필드 구조를 확정하지 못한 경우 mock participant count 0을 사용합니다.
-  return 0;
 }
 
 function buildStatistics(projects: ProjectItem[]): ProjectListResponse['data']['statistics'] {

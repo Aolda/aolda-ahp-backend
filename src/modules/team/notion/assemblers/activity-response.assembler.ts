@@ -1,9 +1,15 @@
-import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints/common';
 import type { ActivityListResponse } from '../../repositories/team.repository';
-import { parseActivityPage } from '../parsers/activity-page.parser';
+import type { ActivityAggregate } from '../types/activity-aggregate';
 
-export function assembleActivityListResponse(pages: PageObjectResponse[]): ActivityListResponse {
-  const data = pages.map((page) => parseActivityPage(page));
+export function assembleActivityListResponse(activities: ActivityAggregate[]): ActivityListResponse {
+  const data = activities.map((activity) => ({
+    status: activity.status,
+    startedAt: activity.startedAt,
+    activityNames: activity.activityNames,
+    background: activity.background,
+    activityType: activity.activityType,
+    description: activity.description,
+  }));
 
   return {
     total: data.length,

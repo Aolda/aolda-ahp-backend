@@ -22,6 +22,9 @@ import {
 } from '../notion/extractors/crew-page.extractor';
 import { ActivityFetcher } from '../notion/fetchers/activity.fetcher';
 import { CrewFetcher } from '../notion/fetchers/crew.fetcher';
+import { parseActivityPage } from '../notion/parsers/activity-page.parser';
+import type { ActivityAggregate } from '../notion/types/activity-aggregate';
+import type { ActivityPageSource } from '../notion/types/activity-source';
 import type { CrewPageSource } from '../notion/types/crew-source';
 
 interface TeamRealDbConfig {
@@ -51,8 +54,12 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   async getActivityList(): Promise<ActivityListResponse> {
-    const pages = await this.activityFetcher.fetchAll();
-    return assembleActivityListResponse(pages);
+    const pages = await this.activityFetcher.fetchPages();
+    const activityAggregates = await Promise.all(
+      pages.map((page, index) => this.buildActivityAggregate(page, index + 1)),
+    );
+
+    return assembleActivityListResponse(activityAggregates);
   }
 
   async getCrewDetail(crewId: string): Promise<CrewDetailResponse> {
@@ -70,8 +77,15 @@ export class TeamRealRepository implements TeamRepository {
 
   async getProjectList(): Promise<ProjectListResponse> {
     // 프로젝트 목록은 별도 project 데이터소스가 아니라 activity 원천 데이터에서 파생합니다.
-    const pages = await this.activityFetcher.fetchAll();
-    return assembleProjectListResponse(pages);
+    const pages = await this.activityFetcher.fetchPages();
+    const activityAggregates = await Promise.all(
+      pages.map((page, index) => this.buildActivityAggregate(page, index + 1)),
+    );
+    const projectAggregates = activityAggregates.filter(
+      (activity) => activity.activityType === 'ACTIVITY_TYPE/PROJECT',
+    );
+
+    return assembleProjectListResponse(projectAggregates);
   }
 
   async getProjectDetail(_projectId: string): Promise<ProjectDetailResponse> {
@@ -135,5 +149,45 @@ export class TeamRealRepository implements TeamRepository {
         followings: 0,
       },
     };
+  }
+
+  private async buildActivityAggregate(
+    page: Awaited<ReturnType<typeof this.activityFetcher.fetchPages>>[number],
+    activityId: number,
+  ): Promise<ActivityAggregate> {
+    const source = await this.activityFetcher.fetchPageSource(page);
+    return this.composeActivityAggregate(source, activityId);
+  }
+
+  private composeActivityAggregate(source: ActivityPageSource, activityId: number): ActivityAggregate {
+    const parsed = parseActivityPage(source.page);
+
+    return {
+      // TODO(dummy): Notion page id -> API activityId 매핑 규칙이 아직 없어 임시 순번을 사용합니다.
+      activityId,
+      status: parsed.status,
+      startedAt: parsed.startedAt,
+      activityType: parsed.activityType,
+      participantsCount: parsed.participantsCount,
+      activityNames: {
+        ko: parsed.koName,
+        // TODO(dummy): 영문 activity 이름은 아직 별도 번역/명명 원천 데이터 미연동 상태라 repository mock supplement 값입니다.
+        en: `DUMMY_EN_NAME_FOR_${this.sanitizeForMockKey(parsed.koName)}`,
+        // TODO(dummy): brief 이름은 아직 별도 약칭 원천 데이터 미연동 상태라 repository mock supplement 값입니다.
+        brief: `DUMMY_BRIEF_FOR_${this.sanitizeForMockKey(parsed.koName)}`,
+      },
+      background: {
+        // TODO(dummy): page cover가 없으면 background 이미지는 repository mock supplement URL을 사용합니다.
+        url: parsed.backgroundImageUrl ?? 'https://dummy.aolda.local/activities/background-not-fetched-yet.jpg',
+        // TODO(dummy): background color는 현재 별도 디자인 메타데이터 미연동 상태라 repository mock supplement 값입니다.
+        color: '#000000',
+      },
+      // TODO(dummy): description은 page 본문 block 미조회 상태라 repository mock supplement 값입니다.
+      description: 'DUMMY_ACTIVITY_DESCRIPTION_NOT_FETCHED_YET',
+    };
+  }
+
+  private sanitizeForMockKey(value: string): string {
+    return value.replace(/\s+/g, '_').replace(/[^A-Za-z0-9_\-가-힣]/g, '').slice(0, 40) || 'UNKNOWN';
   }
 }

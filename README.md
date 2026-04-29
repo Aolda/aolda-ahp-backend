@@ -94,6 +94,7 @@ prisma/
   - parser/fetcher 결과를 최종 REST 응답 형태로 조립합니다.
   - 이 계층은 응답 shape를 알지만, 직접 외부 API를 호출하지 않습니다.
   - `crew`의 경우 repository가 여러 source와 supplement를 aggregate로 묶고, assembler가 그 aggregate를 응답 DTO로 변환합니다.
+  - `activity/project`도 parser가 page를 해석하고, repository가 mock supplement와 aggregate를 조합한 뒤 assembler가 응답을 만듭니다.
 - `prisma/schema.prisma`
   - Prisma 스키마 파일입니다.
   - 현재는 최소 예시 모델만 두고, 도메인 모델은 추후 확장용으로 남겨두었습니다.
@@ -139,7 +140,8 @@ route/team.ts
 route/team.ts
   -> TeamQueryService
   -> TeamRealRepository
-  -> ActivityFetcher
+  -> ActivityFetcher(raw sources)
+  -> repository aggregate composition
   -> activity-page.parser
   -> activity-response.assembler or project-response.assembler
 ```
@@ -149,9 +151,9 @@ route/team.ts
 - `GET /team/crew`
   - `route -> service -> TeamRealRepository -> CrewFetcher(raw sources) -> extractors -> repository aggregate composition -> crew-response.assembler`
 - `GET /team/activity`
-  - `route -> service -> TeamRealRepository -> ActivityFetcher(raw sources) -> activity-page.parser -> activity-response.assembler`
+  - `route -> service -> TeamRealRepository -> ActivityFetcher(raw sources) -> activity-page.parser -> repository aggregate composition -> activity-response.assembler`
 - `GET /team/project`
-  - `route -> service -> TeamRealRepository -> ActivityFetcher(raw sources) -> activity-page.parser -> project-response.assembler`
+  - `route -> service -> TeamRealRepository -> ActivityFetcher(raw sources) -> activity-page.parser -> repository aggregate composition -> project-response.assembler`
 
 즉 현재 `project list`는 별도 Notion project datasource를 직접 읽지 않고, activity datasource에서 `ACTIVITY_TYPE/PROJECT`로 판별된 항목만 추려 구성합니다.
 
