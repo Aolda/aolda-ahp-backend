@@ -7,12 +7,15 @@ import type {
   ProjectListResponse,
   TeamRepository,
 } from '../repositories/team.repository';
+import { assembleActivityListResponse } from '../notion/assemblers/activity-response.assembler';
+import {
+  assembleCrewDetailResponse,
+  assembleCrewListResponse,
+} from '../notion/assemblers/crew-response.assembler';
+import { assembleProjectListResponse } from '../notion/assemblers/project-response.assembler';
 import { ActivityFetcher } from '../notion/fetchers/activity.fetcher';
 import { CrewFetcher } from '../notion/fetchers/crew.fetcher';
 import { ProjectFetcher } from '../notion/fetchers/project.fetcher';
-import { mapActivityPages } from '../notion/mappers/activity.mapper';
-import { mapCrewDetail, mapCrewPages } from '../notion/mappers/crew.mapper';
-import { mapProjectPages } from '../notion/mappers/project.mapper';
 
 interface TeamRealDbConfig {
   notionClient: Client;
@@ -36,23 +39,23 @@ export class TeamRealRepository implements TeamRepository {
 
   async getCrewList(): Promise<CrewListResponse> {
     const pages = await this.crewFetcher.fetchAll();
-    return mapCrewPages(pages);
+    return assembleCrewListResponse(pages);
   }
 
   async getActivityList(): Promise<ActivityListResponse> {
     const pages = await this.activityFetcher.fetchAll();
-    return mapActivityPages(pages);
+    return assembleActivityListResponse(pages);
   }
 
   async getCrewDetail(crewId: string): Promise<CrewDetailResponse> {
     const detail = await this.crewFetcher.fetchDetail(crewId);
-    return mapCrewDetail(detail);
+    return assembleCrewDetailResponse(detail);
   }
 
   async getProjectList(): Promise<ProjectListResponse> {
     // 프로젝트 목록은 activity 원천 데이터 중 ACTIVITY_TYPE/PROJECT만 필터링해 구성합니다.
     const pages = await this.activityFetcher.fetchAll();
-    return mapProjectPages(pages);
+    return assembleProjectListResponse(pages);
   }
 
   async getProjectDetail(_projectId: string): Promise<ProjectDetailResponse> {

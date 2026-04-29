@@ -18,16 +18,7 @@ const DUMMY_DESCRIPTION = 'DUMMY_ACTIVITY_DESCRIPTION_NOT_FETCHED_YET';
 const DUMMY_BACKGROUND_URL = 'https://dummy.aolda.local/activities/background-not-fetched-yet.jpg';
 const DUMMY_BACKGROUND_COLOR = '#000000';
 
-export function mapActivityPages(pages: PageObjectResponse[]): ActivityListResponse {
-  const data = pages.map((page) => mapActivityPage(page));
-
-  return {
-    total: data.length,
-    data,
-  };
-}
-
-export function mapActivityPage(page: PageObjectResponse): ActivityListItem {
+export function parseActivityPage(page: PageObjectResponse): ActivityListItem {
   const koName = extractActivityName(page);
 
   return {

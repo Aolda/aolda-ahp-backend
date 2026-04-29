@@ -44,7 +44,8 @@ src/
       notion/
         fetchers/
         extractors/
-        mappers/
+        parsers/
+        assemblers/
     cloud/
       services/
       repositories/
@@ -84,6 +85,12 @@ prisma/
 - `src/modules/team/notion/extractors/*`
   - 이미 조회한 `page`/`block`에서 필요한 값을 읽는 순수 함수 계층입니다.
   - 네트워크 호출 없이 입력값만 받아 결과를 반환합니다.
+- `src/modules/team/notion/parsers/*`
+  - Notion의 raw page를 팀 도메인에서 쓰기 쉬운 중간 형태로 해석합니다.
+  - 예: activity page의 상태값, 시작학기, activity type 판별
+- `src/modules/team/notion/assemblers/*`
+  - parser/fetcher 결과를 최종 REST 응답 형태로 조립합니다.
+  - 이 계층은 응답 shape를 알지만, 직접 외부 API를 호출하지 않습니다.
 - `prisma/schema.prisma`
   - Prisma 스키마 파일입니다.
   - 현재는 최소 예시 모델만 두고, 도메인 모델은 추후 확장용으로 남겨두었습니다.
@@ -105,8 +112,9 @@ prisma/
 
 - `fetcher`는 Notion API를 호출합니다.
 - `extractor`는 Notion page/block에서 필요한 값을 읽습니다.
+- `parser`는 raw Notion 객체를 도메인 친화적인 값으로 해석합니다.
+- `assembler`는 최종 REST 응답을 조립합니다.
 - `repository`는 여러 fetch 결과를 조합해 하나의 조회 흐름을 만듭니다.
-- 최종 응답 포맷 조립은 별도 계층으로 점진적으로 분리할 예정입니다.
 
 예를 들어 `GET /team/crew`는 다음과 같은 흐름으로 읽으면 됩니다.
 
@@ -116,6 +124,18 @@ route/team.ts
   -> TeamRealRepository
   -> CrewFetcher
   -> crew-page.extractor / notion-block.extractor
+  -> crew-response.assembler
+```
+
+`GET /team/activity`, `GET /team/project`는 다음처럼 조금 더 세분화됩니다.
+
+```text
+route/team.ts
+  -> TeamQueryService
+  -> TeamRealRepository
+  -> ActivityFetcher
+  -> activity-page.parser
+  -> activity-response.assembler or project-response.assembler
 ```
 
 ## 4) 공개 API 목록

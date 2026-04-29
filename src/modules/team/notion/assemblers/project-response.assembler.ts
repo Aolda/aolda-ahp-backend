@@ -1,14 +1,14 @@
 import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints/common';
 import type { ProjectListResponse } from '../../repositories/team.repository';
-import { mapActivityPage } from './activity.mapper';
+import { parseActivityPage } from '../parsers/activity-page.parser';
 
 type ProjectItem = ProjectListResponse['data']['projects'][number];
 type StatusFilter = { key: string; value: string };
 type SeasonFilter = { key: string; value: string };
 
-export function mapProjectPages(pages: PageObjectResponse[]): ProjectListResponse {
+export function assembleProjectListResponse(pages: PageObjectResponse[]): ProjectListResponse {
   const projectActivities = pages
-    .map((page, index) => ({ page, index, activity: mapActivityPage(page) }))
+    .map((page, index) => ({ page, index, activity: parseActivityPage(page) }))
     .filter(({ activity }) => activity.activityType === 'ACTIVITY_TYPE/PROJECT');
 
   const projects = projectActivities.map(({ page, index, activity }) =>
@@ -31,7 +31,7 @@ export function mapProjectPages(pages: PageObjectResponse[]): ProjectListRespons
 function buildProjectItem(
   page: PageObjectResponse,
   index: number,
-  activity: ReturnType<typeof mapActivityPage>,
+  activity: ReturnType<typeof parseActivityPage>,
 ): ProjectItem {
   return {
     // TODO(mock): Notion page id -> API activityId 매핑 규칙이 아직 없어 임시 순번을 사용합니다.
