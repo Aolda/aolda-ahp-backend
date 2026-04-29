@@ -115,7 +115,7 @@ prisma/
 현재 `team` 모듈은 아래 방향으로 구조를 정리하고 있습니다.
 
 - `fetcher`는 Notion API를 호출합니다.
-- `fetcher`는 최종 응답이 아니라 raw source를 반환하는 방향으로 정리 중입니다.
+- `fetcher`는 최종 응답이 아니라 raw source를 반환합니다.
 - `extractor`는 Notion page/block에서 필요한 값을 읽습니다.
 - `parser`는 raw Notion 객체를 도메인 친화적인 값으로 해석합니다.
 - `assembler`는 최종 REST 응답을 조립합니다.
