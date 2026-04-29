@@ -83,6 +83,7 @@ prisma/
   - Notion SDK 호출만 담당합니다.
   - `dataSources.query`, `blocks.children.list` 같은 I/O를 이 계층에 둡니다.
   - `CrewFetcher`는 `page + profileImageUrl + description` 같은 raw source만 반환합니다.
+  - `ActivityFetcher`도 `page` 기반 raw source 반환 인터페이스로 전환 중입니다.
 - `src/modules/team/notion/extractors/*`
   - 이미 조회한 `page`/`block`에서 필요한 값을 읽는 순수 함수 계층입니다.
   - 네트워크 호출 없이 입력값만 받아 결과를 반환합니다.
@@ -148,9 +149,9 @@ route/team.ts
 - `GET /team/crew`
   - `route -> service -> TeamRealRepository -> CrewFetcher(raw sources) -> extractors -> repository aggregate composition -> crew-response.assembler`
 - `GET /team/activity`
-  - `route -> service -> TeamRealRepository -> ActivityFetcher -> activity-page.parser -> activity-response.assembler`
+  - `route -> service -> TeamRealRepository -> ActivityFetcher(raw sources) -> activity-page.parser -> activity-response.assembler`
 - `GET /team/project`
-  - `route -> service -> TeamRealRepository -> ActivityFetcher -> activity-page.parser -> project-response.assembler`
+  - `route -> service -> TeamRealRepository -> ActivityFetcher(raw sources) -> activity-page.parser -> project-response.assembler`
 
 즉 현재 `project list`는 별도 Notion project datasource를 직접 읽지 않고, activity datasource에서 `ACTIVITY_TYPE/PROJECT`로 판별된 항목만 추려 구성합니다.
 
