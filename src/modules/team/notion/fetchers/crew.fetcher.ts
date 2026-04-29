@@ -11,6 +11,7 @@ import {
   isCurrentActiveCrew,
 } from '../extractors/crew-page.extractor';
 import { extractImageUrl, extractPlainTextFromBlock } from '../extractors/notion-block.extractor';
+import type { CrewDetailSource, CrewPageSource } from '../types/crew-source';
 
 const DUMMY_DESCRIPTION = 'DUMMY_DESCRIPTION_NOT_FETCHED_YET';
 const DUMMY_PROFILE_URL = 'https://dummy.aolda.local/profiles/not-fetched-yet.jpg';
@@ -23,6 +24,26 @@ export class CrewFetcher {
     private readonly notionClient: Client,
     private readonly dataSourceId: string,
   ) {}
+
+  async fetchPages(): Promise<PageObjectResponse[]> {
+    return this.fetchAllPages();
+  }
+
+  async fetchPageSource(page: PageObjectResponse): Promise<CrewPageSource> {
+    return {
+      page,
+      profileImageUrl: await this.findFirstImageUrl(page.id),
+    };
+  }
+
+  async fetchDetailSource(page: PageObjectResponse): Promise<CrewDetailSource> {
+    const pageSource = await this.fetchPageSource(page);
+
+    return {
+      ...pageSource,
+      description: await this.fetchCrewDescription(page.id),
+    };
+  }
 
   async fetchAll(): Promise<CrewListItem[]> {
     const pages = await this.fetchAllPages();
@@ -43,12 +64,12 @@ export class CrewFetcher {
     }
 
     const baseItem = await this.buildCrewListItem(targetPage, targetIndex);
-    const description = await this.fetchCrewDescription(targetPage.id);
+    const detailSource = await this.fetchDetailSource(targetPage);
 
     return {
       ...baseItem,
       crewEmail: extractCrewEmail(targetPage),
-      description,
+      description: detailSource.description,
       // TODO(dummy): 활동 데이터는 아직 별도 activity 데이터소스 연동 전이라 비워둔 mock 값입니다.
       activities: [],
       // TODO(dummy): 블로깅 데이터는 아직 별도 블로그/콘텐츠 연동 전이라 비워둔 mock 값입니다.
@@ -79,7 +100,8 @@ export class CrewFetcher {
 
   private async buildCrewListItem(page: PageObjectResponse, index: number): Promise<CrewListItem> {
     const generations = extractGenerationNumbers(page);
-    const profileUrl = (await this.findFirstImageUrl(page.id)) ?? DUMMY_PROFILE_URL;
+    const pageSource = await this.fetchPageSource(page);
+    const profileUrl = pageSource.profileImageUrl ?? DUMMY_PROFILE_URL;
 
     return {
       // TODO(dummy): Notion 원본 ID -> API crewId 매핑 규칙이 아직 없어서 임시 순번을 사용합니다.
