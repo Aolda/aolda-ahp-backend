@@ -84,6 +84,7 @@ prisma/
   - `dataSources.query`, `blocks.children.list` 같은 I/O를 이 계층에 둡니다.
   - `CrewFetcher`는 `page + profileImageUrl + description` 같은 raw source만 반환합니다.
   - `ActivityFetcher`도 `page` 기반 raw source 반환 인터페이스로 전환 중입니다.
+  - 임원 lookup처럼 별도 보조 데이터소스도 전용 fetcher로 분리해 조합합니다.
 - `src/modules/team/notion/extractors/*`
   - 이미 조회한 `page`/`block`에서 필요한 값을 읽는 순수 함수 계층입니다.
   - 네트워크 호출 없이 입력값만 받아 결과를 반환합니다.
@@ -237,9 +238,10 @@ http://localhost:8001/openapi.json
 - `NOTION_API_KEY`
   - Notion API 호출용 integration secret
 - `NOTION_TEAM_DB_IDS`
-  - `crew:<id>,activity:<id>,project:<id>` 형식의 key-value 문자열
+  - `crew:<id>,activity:<id>,project:<id>,crew_role_lookup:<id>` 형식의 key-value 문자열
   - 현재 구현 기준 필수값은 `crew`, `activity`입니다.
   - `project`는 향후 project detail 구현용 예약 키로 보고 있으며, 현 시점의 project list 호출에는 사용하지 않습니다.
+  - `crew_role_lookup`는 crewLog 임원 정보 lookup용 보조 데이터소스입니다.
 
 예시:
 ```bash
