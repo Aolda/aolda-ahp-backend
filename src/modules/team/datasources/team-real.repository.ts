@@ -239,6 +239,7 @@ export class TeamRealRepository implements TeamRepository {
     creatorId: string,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
   ): CrewListAggregate['crewLog'] {
+    // lookup에 존재하는 기수는 임원 이력으로 대체하고, 나머지 기수만 일반 활동회원 이력으로 보완합니다.
     const executiveRecords = (crewRoleLookupMap.get(creatorId) ?? [])
       .filter((record) => record.generation !== null)
       .map((record) => ({
@@ -266,6 +267,7 @@ export class TeamRealRepository implements TeamRepository {
       case '부회장':
         return 'CREW_ROLE/VP';
       case '총무':
+        // TODO: 총무 코드가 API 스펙에 명시되면 해당 규격으로 교체하세요.
         return 'CREW_ROLE/GA';
       default:
         return 'CREW_ROLE/OTHER_EXECUTIVE';
