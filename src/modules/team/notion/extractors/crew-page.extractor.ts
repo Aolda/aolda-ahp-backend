@@ -13,7 +13,7 @@ export function extractCrewName(page: PageObjectResponse): string {
 }
 
 export function extractUnivDepartment(page: PageObjectResponse): string {
-  const department = (page.properties['학과'] as { select?: { name?: string } }).select?.name;
+  const department = (page.properties['학과'] as { select?: { name?: string } } | undefined)?.select?.name;
   return department ?? 'DUMMY_DEPARTMENT_NOT_FETCHED_YET';
 }
 
