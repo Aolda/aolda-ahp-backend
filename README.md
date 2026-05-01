@@ -122,6 +122,8 @@ prisma/
 - `assembler`는 최종 REST 응답을 조립합니다.
 - `repository`는 여러 fetch 결과를 조합해 하나의 조회 흐름을 만듭니다.
 - `repository`는 cross-source 값이나 아직 미연동된 값의 mock supplement도 이 단계에서 관리합니다.
+- `crewLog`는 `Crew Book page.created_by.id -> 임원 lookup datasource의 people 필드` 매칭으로 조합합니다.
+- lookup에 없는 기수는 일반 활동회원 이력으로 fallback 합니다.
 
 예를 들어 `GET /team/crew`는 다음과 같은 흐름으로 읽으면 됩니다.
 
