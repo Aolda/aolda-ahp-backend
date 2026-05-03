@@ -18,6 +18,7 @@ import { assembleProjectListResponse } from '../notion/assemblers/project-respon
 import {
   extractCrewEmail,
   extractGenerationNumbers,
+  extractProfileAccountIds,
   isCurrentActiveCrew,
 } from '../notion/extractors/crew-page.extractor';
 import { ActivityFetcher } from '../notion/fetchers/activity.fetcher';
@@ -139,14 +140,14 @@ export class TeamRealRepository implements TeamRepository {
   ): CrewListAggregate {
     const generations = extractGenerationNumbers(source.page);
     const joinedGen = generations[0] ?? 0;
-    const creatorId = source.page.created_by.id;
+    const profileAccountIds = extractProfileAccountIds(source.page);
 
     return {
       // TODO(dummy): Notion 원본 ID -> API crewId 매핑 규칙이 아직 없어서 임시 순번을 사용합니다.
       crewId,
       source,
       joinedGen,
-      crewLog: this.buildCrewLog(generations, joinedGen, creatorId, crewRoleLookupMap),
+      crewLog: this.buildCrewLog(generations, joinedGen, profileAccountIds, crewRoleLookupMap),
       // TODO(dummy): 활동 수는 관련 데이터소스 조회 전까지 repository mock supplement 값입니다.
       totalActivities: 0,
       // TODO(dummy): 블로깅 수는 관련 데이터소스 조회 전까지 repository mock supplement 값입니다.
@@ -238,20 +239,27 @@ export class TeamRealRepository implements TeamRepository {
   private buildCrewLog(
     crewGenerations: number[],
     joinedGen: number,
-    creatorId: string,
+    profileAccountIds: string[],
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
   ): CrewListAggregate['crewLog'] {
     // 입회 기수 이전의 임원 이력은 현재 crew page 기준 이력으로 간주하지 않습니다.
+    // 임원 lookup 매핑은 페이지 생성자가 아니라 계정(프로필) people 필드의 Notion user id를 기준으로 조회합니다.
     // lookup에 존재하는 기수는 임원 이력으로 대체하고, 나머지 기수만 일반 활동회원 이력으로 보완합니다.
-    const executiveRecords = (crewRoleLookupMap.get(creatorId) ?? [])
-      .filter((record) => record.generation !== null && record.generation >= joinedGen)
-      .map((record) => ({
-        generation: record.generation as number,
-        type: this.mapExecutiveRole(record.rawRole),
-        department: EXECUTIVE_DEPARTMENT,
-      }));
+    const executiveRecordsByGeneration = new Map<number, CrewListAggregate['crewLog'][number]>();
 
-    const executiveGenerations = new Set(executiveRecords.map((record) => record.generation));
+    profileAccountIds
+      .flatMap((profileAccountId) => crewRoleLookupMap.get(profileAccountId) ?? [])
+      .filter((record) => record.generation !== null && record.generation >= joinedGen)
+      .forEach((record) => {
+        executiveRecordsByGeneration.set(record.generation as number, {
+          generation: record.generation as number,
+          type: this.mapExecutiveRole(record.rawRole),
+          department: EXECUTIVE_DEPARTMENT,
+        });
+      });
+
+    const uniqueExecutiveRecords = Array.from(executiveRecordsByGeneration.values());
+    const executiveGenerations = new Set(uniqueExecutiveRecords.map((record) => record.generation));
     const memberRecords = crewGenerations
       .filter((generation) => !executiveGenerations.has(generation))
       .map((generation) => ({
@@ -260,7 +268,9 @@ export class TeamRealRepository implements TeamRepository {
         department: GENERAL_MEMBER_DEPARTMENT,
       }));
 
-    return [...executiveRecords, ...memberRecords].sort((left, right) => left.generation - right.generation);
+    return [...uniqueExecutiveRecords, ...memberRecords].sort(
+      (left, right) => left.generation - right.generation,
+    );
   }
 
   private mapExecutiveRole(rawRole: string | null): string {

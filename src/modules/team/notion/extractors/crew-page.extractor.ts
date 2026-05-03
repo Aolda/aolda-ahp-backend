@@ -32,6 +32,12 @@ export function extractCrewEmail(page: PageObjectResponse): string {
   return `${portalId}@ajou.ac.kr`;
 }
 
+export function extractProfileAccountIds(page: PageObjectResponse): string[] {
+  const people = (page.properties['계정(프로필)'] as { people?: Array<{ id?: string }> } | undefined)?.people;
+
+  return (people ?? []).map((person) => person.id).filter((id): id is string => Boolean(id));
+}
+
 export function extractUnivJoinedYear(page: PageObjectResponse): string {
   const propertyCandidates = [
     page.properties['입학년도'] as {
