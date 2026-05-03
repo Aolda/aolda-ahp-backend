@@ -33,14 +33,26 @@ export class CrewFetcher {
   }
 
   private async fetchAllPages(): Promise<PageObjectResponse[]> {
-    // TODO: 100건 초과 시 start_cursor를 이용한 페이지네이션 처리 필요
-    const response = await this.notionClient.dataSources.query({
-      data_source_id: this.dataSourceId,
-    });
+    const pages: PageObjectResponse[] = [];
+    let cursor: string | undefined;
 
-    return response.results.filter(
-      (page): page is PageObjectResponse => page.object === 'page' && 'properties' in page,
-    );
+    do {
+      const response = await this.notionClient.dataSources.query({
+        data_source_id: this.dataSourceId,
+        start_cursor: cursor,
+        page_size: 100,
+      });
+
+      pages.push(
+        ...response.results.filter(
+          (page): page is PageObjectResponse => page.object === 'page' && 'properties' in page,
+        ),
+      );
+
+      cursor = response.next_cursor ?? undefined;
+    } while (cursor);
+
+    return pages;
   }
 
   private async fetchCrewDescription(pageId: string): Promise<string> {

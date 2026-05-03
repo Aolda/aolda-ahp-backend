@@ -41,6 +41,37 @@ export function extractProfileAccountIds(page: PageObjectResponse): string[] {
     .filter((id): id is string => Boolean(id));
 }
 
+export function extractCrewWritingTerm(page: PageObjectResponse): string | null {
+  return (page.properties['작성기수'] as { select?: { name?: string } } | undefined)?.select?.name ?? null;
+}
+
+export function extractCrewTeamName(page: PageObjectResponse): string | null {
+  const property = page.properties['팀'] as
+    | {
+        select?: { name?: string };
+        rich_text?: Array<{ plain_text?: string }>;
+        title?: Array<{ plain_text?: string }>;
+      }
+    | undefined;
+
+  const selectName = property?.select?.name?.trim();
+  if (selectName) {
+    return selectName;
+  }
+
+  const richText = property?.rich_text?.map((item) => item.plain_text ?? '').join('').trim();
+  if (richText) {
+    return richText;
+  }
+
+  const title = property?.title?.map((item) => item.plain_text ?? '').join('').trim();
+  if (title) {
+    return title;
+  }
+
+  return null;
+}
+
 export function extractUnivJoinedYear(page: PageObjectResponse): string {
   const propertyCandidates = [
     page.properties['입학년도'] as {

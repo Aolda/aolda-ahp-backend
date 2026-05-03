@@ -16,15 +16,19 @@ import {
 } from '../notion/assemblers/crew-response.assembler';
 import { assembleProjectListResponse } from '../notion/assemblers/project-response.assembler';
 import {
+  extractCrewTeamName,
   extractCrewEmail,
   extractGenerationNumbers,
   extractProfileAccountIds,
+  extractCrewWritingTerm,
   isCurrentActiveCrew,
 } from '../notion/extractors/crew-page.extractor';
+import { CrewGenerationMappingFetcher } from '../notion/fetchers/crew-generation-mapping.fetcher';
 import { ActivityFetcher } from '../notion/fetchers/activity.fetcher';
 import { CrewFetcher } from '../notion/fetchers/crew.fetcher';
 import { CrewRoleLookupFetcher } from '../notion/fetchers/crew-role-lookup.fetcher';
 import { parseActivityPage } from '../notion/parsers/activity-page.parser';
+import { parseCrewGenerationMappingPage } from '../notion/parsers/crew-generation-mapping-page.parser';
 import {
   parseCrewRoleLookupPage,
   type ParsedCrewRoleLookupPage,
@@ -34,9 +38,9 @@ import type { ActivityPageSource } from '../notion/types/activity-source';
 import type { CrewPageSource } from '../notion/types/crew-source';
 
 const DEFAULT_CREW_ROLE_LOOKUP_DATA_SOURCE_ID = '353a7bac-f955-8048-8e4d-000bdec7a591';
-const EXECUTIVE_DEPARTMENT = 'DEPARTMENT_TYPE/CLEVEL';
+const DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID = '355a7bac-f955-80da-b748-000b2233c7dd';
 const GENERAL_MEMBER_ROLE = 'CREW_ROLE/GENERAL_MEMBER';
-const GENERAL_MEMBER_DEPARTMENT = 'DEPARTMENT_TYPE/ACTIVITY_MEMBER';
+const UNKNOWN_CREW_TEAM = 'DUMMY_TEAM_NOT_FETCHED_YET';
 
 interface TeamRealDbConfig {
   notionClient: Client;
@@ -47,6 +51,7 @@ export class TeamRealRepository implements TeamRepository {
   private readonly crewFetcher: CrewFetcher;
   private readonly activityFetcher: ActivityFetcher;
   private readonly crewRoleLookupFetcher: CrewRoleLookupFetcher;
+  private readonly crewGenerationMappingFetcher: CrewGenerationMappingFetcher;
 
   constructor({ notionClient, notionTeamDbIds }: TeamRealDbConfig) {
     if (!notionTeamDbIds.crew) throw new Error('NOTION_TEAM_DB_IDS must include crew:<id>');
@@ -58,15 +63,24 @@ export class TeamRealRepository implements TeamRepository {
       notionClient,
       notionTeamDbIds.crewRoleLookup ?? DEFAULT_CREW_ROLE_LOOKUP_DATA_SOURCE_ID,
     );
+    this.crewGenerationMappingFetcher = new CrewGenerationMappingFetcher(
+      notionClient,
+      DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID,
+    );
   }
 
   async getCrewList(): Promise<CrewListResponse> {
-    const [activePages, crewRoleLookupMap] = await Promise.all([
-      this.fetchActiveCrewPages(),
+    const [crewPages, crewRoleLookupMap, activityTermGenerationMap] = await Promise.all([
+      this.crewFetcher.fetchPages(),
       this.fetchCrewRoleLookupMap(),
+      this.fetchActivityTermGenerationMap(),
     ]);
+    const activePages = crewPages.filter(isCurrentActiveCrew);
+    const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(crewPages, activityTermGenerationMap);
     const crewAggregates = await Promise.all(
-      activePages.map((page, index) => this.buildCrewListAggregate(page, index + 1, crewRoleLookupMap)),
+      activePages.map((page, index) =>
+        this.buildCrewListAggregate(page, index + 1, crewRoleLookupMap, crewTeamHistoryMap),
+      ),
     );
 
     return assembleCrewListResponse(crewAggregates);
@@ -82,10 +96,13 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   async getCrewDetail(crewId: string): Promise<CrewDetailResponse> {
-    const [activePages, crewRoleLookupMap] = await Promise.all([
-      this.fetchActiveCrewPages(),
+    const [crewPages, crewRoleLookupMap, activityTermGenerationMap] = await Promise.all([
+      this.crewFetcher.fetchPages(),
       this.fetchCrewRoleLookupMap(),
+      this.fetchActivityTermGenerationMap(),
     ]);
+    const activePages = crewPages.filter(isCurrentActiveCrew);
+    const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(crewPages, activityTermGenerationMap);
     const targetIndex = Number(crewId) - 1;
     const targetPage = activePages[targetIndex];
 
@@ -97,6 +114,7 @@ export class TeamRealRepository implements TeamRepository {
       targetPage,
       targetIndex + 1,
       crewRoleLookupMap,
+      crewTeamHistoryMap,
     );
     return assembleCrewDetailResponse(detailAggregate);
   }
@@ -119,24 +137,21 @@ export class TeamRealRepository implements TeamRepository {
     throw new Error('Not implemented: TeamRealRepository.getProjectDetail');
   }
 
-  private async fetchActiveCrewPages() {
-    const pages = await this.crewFetcher.fetchPages();
-    return pages.filter(isCurrentActiveCrew);
-  }
-
   private async buildCrewListAggregate(
-    page: Awaited<ReturnType<typeof this.fetchActiveCrewPages>>[number],
+    page: Awaited<ReturnType<typeof this.crewFetcher.fetchPages>>[number],
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
+    crewTeamHistoryMap: Map<string, Map<number, string>>,
   ): Promise<CrewListAggregate> {
     const source = await this.crewFetcher.fetchPageSource(page);
-    return this.composeCrewListAggregate(source, crewId, crewRoleLookupMap);
+    return this.composeCrewListAggregate(source, crewId, crewRoleLookupMap, crewTeamHistoryMap);
   }
 
   private composeCrewListAggregate(
     source: CrewPageSource,
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
+    crewTeamHistoryMap: Map<string, Map<number, string>>,
   ): CrewListAggregate {
     const generations = extractGenerationNumbers(source.page);
     const joinedGen = generations[0] ?? 0;
@@ -147,7 +162,13 @@ export class TeamRealRepository implements TeamRepository {
       crewId,
       source,
       joinedGen,
-      crewLog: this.buildCrewLog(generations, joinedGen, profileAccountIds, crewRoleLookupMap),
+      crewLog: this.buildCrewLog(
+        generations,
+        joinedGen,
+        profileAccountIds,
+        crewRoleLookupMap,
+        crewTeamHistoryMap,
+      ),
       // TODO(dummy): 활동 수는 관련 데이터소스 조회 전까지 repository mock supplement 값입니다.
       totalActivities: 0,
       // TODO(dummy): 블로깅 수는 관련 데이터소스 조회 전까지 repository mock supplement 값입니다.
@@ -156,12 +177,18 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   private async buildCrewDetailAggregate(
-    page: Awaited<ReturnType<typeof this.fetchActiveCrewPages>>[number],
+    page: Awaited<ReturnType<typeof this.crewFetcher.fetchPages>>[number],
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
+    crewTeamHistoryMap: Map<string, Map<number, string>>,
   ): Promise<CrewDetailAggregate> {
     const detailSource = await this.crewFetcher.fetchDetailSource(page);
-    const baseAggregate = this.composeCrewListAggregate(detailSource, crewId, crewRoleLookupMap);
+    const baseAggregate = this.composeCrewListAggregate(
+      detailSource,
+      crewId,
+      crewRoleLookupMap,
+      crewTeamHistoryMap,
+    );
 
     return {
       ...baseAggregate,
@@ -236,25 +263,70 @@ export class TeamRealRepository implements TeamRepository {
     return lookupMap;
   }
 
+  private async fetchActivityTermGenerationMap(): Promise<Map<string, number>> {
+    const pages = await this.crewGenerationMappingFetcher.fetchPages();
+    const activityTermGenerationMap = new Map<string, number>();
+
+    for (const page of pages) {
+      const parsed = parseCrewGenerationMappingPage(page);
+      if (!parsed.activityTerm || parsed.generation === null) {
+        continue;
+      }
+
+      activityTermGenerationMap.set(parsed.activityTerm, parsed.generation);
+    }
+
+    return activityTermGenerationMap;
+  }
+
+  private buildCrewTeamHistoryMap(
+    crewPages: Awaited<ReturnType<typeof this.crewFetcher.fetchPages>>,
+    activityTermGenerationMap: Map<string, number>,
+  ): Map<string, Map<number, string>> {
+    const crewTeamHistoryMap = new Map<string, Map<number, string>>();
+
+    for (const page of crewPages) {
+      const activityTerm = extractCrewWritingTerm(page);
+      const generation = activityTerm ? activityTermGenerationMap.get(activityTerm) : undefined;
+      const teamName = extractCrewTeamName(page);
+
+      if (generation === undefined || !teamName) {
+        continue;
+      }
+
+      for (const profileAccountId of extractProfileAccountIds(page)) {
+        const history = crewTeamHistoryMap.get(profileAccountId) ?? new Map<number, string>();
+        history.set(generation, teamName);
+        crewTeamHistoryMap.set(profileAccountId, history);
+      }
+    }
+
+    return crewTeamHistoryMap;
+  }
+
   private buildCrewLog(
     crewGenerations: number[],
     joinedGen: number,
     profileAccountIds: string[],
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
+    crewTeamHistoryMap: Map<string, Map<number, string>>,
   ): CrewListAggregate['crewLog'] {
     // 입회 기수 이전의 임원 이력은 현재 crew page 기준 이력으로 간주하지 않습니다.
     // 임원 lookup 매핑은 페이지 생성자가 아니라 계정(프로필) people 필드의 Notion user id를 기준으로 조회합니다.
+    // department는 Crew Book의 작성기수 -> 실제 기수 매핑을 거쳐, 해당 기수 당시의 팀 이름을 그대로 사용합니다.
     // lookup에 존재하는 기수는 임원 이력으로 대체하고, 나머지 기수만 일반 활동회원 이력으로 보완합니다.
     const executiveRecordsByGeneration = new Map<number, CrewListAggregate['crewLog'][number]>();
+    const crewTeamByGeneration = this.buildCrewTeamByGeneration(profileAccountIds, crewTeamHistoryMap);
 
     profileAccountIds
       .flatMap((profileAccountId) => crewRoleLookupMap.get(profileAccountId) ?? [])
       .filter((record) => record.generation !== null && record.generation >= joinedGen)
       .forEach((record) => {
+        const generation = record.generation as number;
         executiveRecordsByGeneration.set(record.generation as number, {
-          generation: record.generation as number,
+          generation,
           type: this.mapExecutiveRole(record.rawRole),
-          department: EXECUTIVE_DEPARTMENT,
+          department: crewTeamByGeneration.get(generation) ?? UNKNOWN_CREW_TEAM,
         });
       });
 
@@ -265,12 +337,32 @@ export class TeamRealRepository implements TeamRepository {
       .map((generation) => ({
         generation,
         type: GENERAL_MEMBER_ROLE,
-        department: GENERAL_MEMBER_DEPARTMENT,
+        department: crewTeamByGeneration.get(generation) ?? UNKNOWN_CREW_TEAM,
       }));
 
     return [...uniqueExecutiveRecords, ...memberRecords].sort(
       (left, right) => left.generation - right.generation,
     );
+  }
+
+  private buildCrewTeamByGeneration(
+    profileAccountIds: string[],
+    crewTeamHistoryMap: Map<string, Map<number, string>>,
+  ): Map<number, string> {
+    const crewTeamByGeneration = new Map<number, string>();
+
+    for (const profileAccountId of profileAccountIds) {
+      const history = crewTeamHistoryMap.get(profileAccountId);
+      if (!history) {
+        continue;
+      }
+
+      for (const [generation, teamName] of history.entries()) {
+        crewTeamByGeneration.set(generation, teamName);
+      }
+    }
+
+    return crewTeamByGeneration;
   }
 
   private mapExecutiveRole(rawRole: string | null): string {
