@@ -6,6 +6,7 @@ import {
   CREW_LIST_EXAMPLE,
   PROJECT_DETAIL_EXAMPLE,
   PROJECT_LIST_EXAMPLE,
+  TEAM_DEPARTMENT_KEYS_EXAMPLE,
 } from '../constants/team';
 import { errorSchema, serviceUnavailableSchema, successSchema } from '../constants/schemas';
 import { TeamQueryService } from '../modules/team/services/team-query.service';
@@ -45,6 +46,21 @@ export async function registerTeamRoutes(app: FastifyInstance, deps: TeamRouteDe
       } as any,
     },
     async () => teamQueryService.getActivityList(),
+  );
+
+  app.get(
+    '/team/department',
+    {
+      schema: {
+        tags: ['team'],
+        summary: '크루 부서 key-value 조회',
+        response: {
+          200: successSchema(TEAM_DEPARTMENT_KEYS_EXAMPLE),
+          503: errorSchema('ERR_EXT_REQ_FAILED', 'Service Unavailable'),
+        },
+      } as any,
+    },
+    async () => teamQueryService.getDepartmentKeys(),
   );
 
   app.get(

@@ -4,6 +4,7 @@ import {
   CrewListResponse,
   ProjectDetailResponse,
   ProjectListResponse,
+  TeamDepartmentKeysResponse,
   TeamRepository,
 } from '../repositories/team.repository';
 
@@ -21,6 +22,10 @@ export class TeamQueryService {
 
   async getCrewDetail(crewId: string): Promise<CrewDetailResponse> {
     return this.teamRepository.getCrewDetail(crewId);
+  }
+
+  async getDepartmentKeys(): Promise<TeamDepartmentKeysResponse> {
+    return this.teamRepository.getDepartmentKeys();
   }
 
   async getProjectList(): Promise<ProjectListResponse> {

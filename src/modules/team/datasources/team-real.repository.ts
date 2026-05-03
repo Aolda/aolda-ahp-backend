@@ -5,8 +5,10 @@ import type {
   CrewListResponse,
   ProjectDetailResponse,
   ProjectListResponse,
+  TeamDepartmentKeysResponse,
   TeamRepository,
 } from '../repositories/team.repository';
+import { TEAM_DEPARTMENT_KEYS_EXAMPLE } from '../../../constants/team';
 import { assembleActivityListResponse } from '../notion/assemblers/activity-response.assembler';
 import {
   type CrewDetailAggregate,
@@ -36,6 +38,7 @@ import {
 import type { ActivityAggregate } from '../notion/types/activity-aggregate';
 import type { ActivityPageSource } from '../notion/types/activity-source';
 import type { CrewPageSource } from '../notion/types/crew-source';
+import { CREW_DEPARTMENT_KEY_VALUES } from '../constants/crew-log-keys';
 
 const DEFAULT_CREW_ROLE_LOOKUP_DATA_SOURCE_ID = '353a7bac-f955-8048-8e4d-000bdec7a591';
 const DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID = '355a7bac-f955-80da-b748-000b2233c7dd';
@@ -117,6 +120,13 @@ export class TeamRealRepository implements TeamRepository {
       crewTeamHistoryMap,
     );
     return assembleCrewDetailResponse(detailAggregate);
+  }
+
+  async getDepartmentKeys(): Promise<TeamDepartmentKeysResponse> {
+    return {
+      ...TEAM_DEPARTMENT_KEYS_EXAMPLE,
+      data: { ...CREW_DEPARTMENT_KEY_VALUES },
+    };
   }
 
   async getProjectList(): Promise<ProjectListResponse> {

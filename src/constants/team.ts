@@ -36,6 +36,18 @@ export const CREW_LIST_EXAMPLE = {
   ],
 };
 
+export const TEAM_DEPARTMENT_KEYS_EXAMPLE = {
+  data: {
+    'DEPARTMENT_TYPE/CLEVEL': '임원진',
+    'DEPARTMENT_TYPE/DEV': '개발팀',
+    'DEPARTMENT_TYPE/INFRA_DEV': '인프라개발팀',
+    'DEPARTMENT_TYPE/INFRA': '인프라팀',
+    'DEPARTMENT_TYPE/GA': '운영지원팀',
+    'DEPARTMENT_TYPE/DESIGN': '디자인팀',
+    DUMMY_TEAM_NOT_FETCHED_YET: '팀 정보 미확인',
+  },
+};
+
 export const ACTIVITY_LIST_EXAMPLE = {
   total: 10,
   data: [

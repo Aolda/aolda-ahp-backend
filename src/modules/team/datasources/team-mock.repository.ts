@@ -4,6 +4,7 @@ import {
   CREW_LIST_EXAMPLE,
   PROJECT_DETAIL_EXAMPLE,
   PROJECT_LIST_EXAMPLE,
+  TEAM_DEPARTMENT_KEYS_EXAMPLE,
 } from '../../../constants/team';
 import {
   ActivityListResponse,
@@ -11,6 +12,7 @@ import {
   CrewListResponse,
   ProjectDetailResponse,
   ProjectListResponse,
+  TeamDepartmentKeysResponse,
   TeamRepository,
 } from '../repositories/team.repository';
 
@@ -26,6 +28,10 @@ export class TeamMockRepository implements TeamRepository {
 
   async getCrewDetail(_crewId: string): Promise<CrewDetailResponse> {
     return CREW_DETAIL_EXAMPLE;
+  }
+
+  async getDepartmentKeys(): Promise<TeamDepartmentKeysResponse> {
+    return TEAM_DEPARTMENT_KEYS_EXAMPLE;
   }
 
   async getProjectList(): Promise<ProjectListResponse> {
