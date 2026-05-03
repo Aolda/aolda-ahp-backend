@@ -1,5 +1,14 @@
 export const CREW_LIST_EXAMPLE = {
   total: 10,
+  keys: {
+    department: {
+      'DEPARTMENT_TYPE/CLEVEL': '임원진',
+    },
+    type: {
+      'CREW_ROLE/P': '회장',
+      'CREW_ROLE/VP': '부회장',
+    },
+  },
   data: [
     {
       crewId: 15,

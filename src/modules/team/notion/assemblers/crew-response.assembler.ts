@@ -1,5 +1,9 @@
 import type { CrewDetailResponse, CrewListResponse } from '../../repositories/team.repository';
 import {
+  CREW_DEPARTMENT_KEY_VALUES,
+  CREW_TYPE_KEY_VALUES,
+} from '../../constants/crew-log-keys';
+import {
   extractCrewName,
   extractUnivDepartment,
   extractUnivJoinedYear,
@@ -30,9 +34,12 @@ export interface CrewDetailAggregate extends CrewListAggregate {
 }
 
 export function assembleCrewListResponse(crews: CrewListAggregate[]): CrewListResponse {
+  const data = crews.map((crew) => assembleCrewListItem(crew));
+
   return {
     total: crews.length,
-    data: crews.map((crew) => assembleCrewListItem(crew)),
+    keys: collectCrewListKeys(data),
+    data,
   };
 }
 
@@ -62,5 +69,29 @@ function assembleCrewListItem(crew: CrewListAggregate): CrewListItem {
     univJoinedYear: extractUnivJoinedYear(crew.source.page),
     totalActivities: crew.totalActivities,
     totalBloggings: crew.totalBloggings,
+  };
+}
+
+function collectCrewListKeys(data: CrewListResponse['data']): CrewListResponse['keys'] {
+  const departmentEntries = new Map<string, string>();
+  const typeEntries = new Map<string, string>();
+
+  for (const crew of data) {
+    for (const log of crew.crewLog) {
+      const departmentLabel = CREW_DEPARTMENT_KEY_VALUES[log.department as keyof typeof CREW_DEPARTMENT_KEY_VALUES];
+      if (departmentLabel) {
+        departmentEntries.set(log.department, departmentLabel);
+      }
+
+      const typeLabel = CREW_TYPE_KEY_VALUES[log.type as keyof typeof CREW_TYPE_KEY_VALUES];
+      if (typeLabel) {
+        typeEntries.set(log.type, typeLabel);
+      }
+    }
+  }
+
+  return {
+    department: Object.fromEntries(departmentEntries),
+    type: Object.fromEntries(typeEntries),
   };
 }
