@@ -125,7 +125,8 @@ prisma/
 - `crewLog`는 `Crew Book 계정(프로필) people -> 임원 lookup datasource의 people 필드` 매칭으로 role을 조합합니다.
 - `crewLog.department`는 `Crew Book 작성기수 -> 활동학기/기수 매핑 datasource -> 해당 기수의 Crew Book 팀 필드` 흐름으로 계산합니다.
 - lookup에 없는 기수는 일반 활동회원 이력으로 fallback 합니다.
-- 현재 role 코드는 `회장 -> P`, `부회장 -> VP`, `총무 -> GA` 가정으로 매핑합니다.
+- 현재 role 코드는 `회장 -> CREW_ROLE/P`, `부회장 -> CREW_ROLE/VP`, `총무 -> CREW_ROLE/EA`, `일반 크루원 -> CREW_ROLE/CREW`로 매핑합니다.
+- 현재 department 코드는 `임원진 -> DEPARTMENT_TYPE/CLEVEL`, `개발팀 -> DEPARTMENT_TYPE/DEV`, `인프라개발팀 -> DEPARTMENT_TYPE/INFRA_DEV`, `인프라팀 -> DEPARTMENT_TYPE/INFRA`, `운영지원팀 -> DEPARTMENT_TYPE/GA`, `디자인팀 -> DEPARTMENT_TYPE/DESIGN`으로 매핑합니다.
 
 예를 들어 `GET /team/crew`는 다음과 같은 흐름으로 읽으면 됩니다.
 

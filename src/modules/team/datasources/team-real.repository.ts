@@ -39,7 +39,7 @@ import type { CrewPageSource } from '../notion/types/crew-source';
 
 const DEFAULT_CREW_ROLE_LOOKUP_DATA_SOURCE_ID = '353a7bac-f955-8048-8e4d-000bdec7a591';
 const DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID = '355a7bac-f955-80da-b748-000b2233c7dd';
-const GENERAL_MEMBER_ROLE = 'CREW_ROLE/GENERAL_MEMBER';
+const GENERAL_MEMBER_ROLE = 'CREW_ROLE/CREW';
 const UNKNOWN_CREW_TEAM = 'DUMMY_TEAM_NOT_FETCHED_YET';
 
 interface TeamRealDbConfig {
@@ -312,8 +312,8 @@ export class TeamRealRepository implements TeamRepository {
     crewTeamHistoryMap: Map<string, Map<number, string>>,
   ): CrewListAggregate['crewLog'] {
     // 입회 기수 이전의 임원 이력은 현재 crew page 기준 이력으로 간주하지 않습니다.
-    // 임원 lookup 매핑은 페이지 생성자가 아니라 계정(프로필) people 필드의 Notion user id를 기준으로 조회합니다.
-    // department는 Crew Book의 작성기수 -> 실제 기수 매핑을 거쳐, 해당 기수 당시의 팀 이름을 그대로 사용합니다.
+    // 임원 lookup 매핑은 계정(프로필) people 필드의 Notion user id를 기준으로 조회합니다.
+    // department는 Crew Book의 작성기수 -> 실제 기수 매핑을 거친 뒤, 명세 enum으로 변환합니다.
     // lookup에 존재하는 기수는 임원 이력으로 대체하고, 나머지 기수만 일반 활동회원 이력으로 보완합니다.
     const executiveRecordsByGeneration = new Map<number, CrewListAggregate['crewLog'][number]>();
     const crewTeamByGeneration = this.buildCrewTeamByGeneration(profileAccountIds, crewTeamHistoryMap);
@@ -326,7 +326,7 @@ export class TeamRealRepository implements TeamRepository {
         executiveRecordsByGeneration.set(record.generation as number, {
           generation,
           type: this.mapExecutiveRole(record.rawRole),
-          department: crewTeamByGeneration.get(generation) ?? UNKNOWN_CREW_TEAM,
+          department: this.mapDepartmentType(crewTeamByGeneration.get(generation), true),
         });
       });
 
@@ -337,7 +337,7 @@ export class TeamRealRepository implements TeamRepository {
       .map((generation) => ({
         generation,
         type: GENERAL_MEMBER_ROLE,
-        department: crewTeamByGeneration.get(generation) ?? UNKNOWN_CREW_TEAM,
+        department: this.mapDepartmentType(crewTeamByGeneration.get(generation), false),
       }));
 
     return [...uniqueExecutiveRecords, ...memberRecords].sort(
@@ -372,10 +372,30 @@ export class TeamRealRepository implements TeamRepository {
       case '부회장':
         return 'CREW_ROLE/VP';
       case '총무':
-        // TODO: 총무 코드가 API 스펙에 명시되면 해당 규격으로 교체하세요.
-        return 'CREW_ROLE/GA';
+        return 'CREW_ROLE/EA';
       default:
-        return 'CREW_ROLE/OTHER_EXECUTIVE';
+        return GENERAL_MEMBER_ROLE;
+    }
+  }
+
+  private mapDepartmentType(teamName: string | undefined, isExecutive: boolean): string {
+    if (isExecutive) {
+      return 'DEPARTMENT_TYPE/CLEVEL';
+    }
+
+    switch (teamName) {
+      case '개발팀':
+        return 'DEPARTMENT_TYPE/DEV';
+      case '인프라개발팀':
+        return 'DEPARTMENT_TYPE/INFRA_DEV';
+      case '인프라팀':
+        return 'DEPARTMENT_TYPE/INFRA';
+      case '운영지원팀':
+        return 'DEPARTMENT_TYPE/GA';
+      case '디자인팀':
+        return 'DEPARTMENT_TYPE/DESIGN';
+      default:
+        return UNKNOWN_CREW_TEAM;
     }
   }
 }
