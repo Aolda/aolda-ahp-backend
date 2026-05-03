@@ -2,6 +2,7 @@ import {
   ACTIVITY_LIST_EXAMPLE,
   PROJECT_DETAIL_EXAMPLE,
   PROJECT_LIST_EXAMPLE,
+  TEAM_CREW_TYPE_KEYS_EXAMPLE,
   TEAM_DEPARTMENT_KEYS_EXAMPLE,
 } from '../../../constants/team';
 
@@ -43,6 +44,7 @@ export type ActivityListResponse = typeof ACTIVITY_LIST_EXAMPLE;
 export type ProjectListResponse = typeof PROJECT_LIST_EXAMPLE;
 export type ProjectDetailResponse = typeof PROJECT_DETAIL_EXAMPLE;
 export type TeamDepartmentKeysResponse = typeof TEAM_DEPARTMENT_KEYS_EXAMPLE;
+export type TeamCrewTypeKeysResponse = typeof TEAM_CREW_TYPE_KEYS_EXAMPLE;
 
 export interface CrewDetailResponse extends Omit<CrewListItem, 'totalActivities' | 'totalBloggings'> {
   crewEmail: string;
@@ -77,6 +79,7 @@ export interface TeamRepository {
   getActivityList(): Promise<ActivityListResponse>;
   getCrewDetail(crewId: string): Promise<CrewDetailResponse>;
   getDepartmentKeys(): Promise<TeamDepartmentKeysResponse>;
+  getCrewTypeKeys(): Promise<TeamCrewTypeKeysResponse>;
   getProjectList(): Promise<ProjectListResponse>;
   getProjectDetail(projectId: string): Promise<ProjectDetailResponse>;
 }

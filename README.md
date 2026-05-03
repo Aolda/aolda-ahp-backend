@@ -170,6 +170,8 @@ route/team.ts
   - 응답에는 `total`, `keys`, `data`가 함께 내려가며, `keys`에는 해당 응답에서 실제 사용된 `crewLog.department` / `crewLog.type` key-value 매핑이 포함됩니다.
 - `GET /team/department`
   - 전체 `crewLog.department` key-value 사전을 반환합니다.
+- `GET /team/crewtype`
+  - 전체 `crewLog.type` key-value 사전을 반환합니다.
 - `GET /team/activity`
 - `GET /team/crew/:crew_id`
 - `GET /team/project`

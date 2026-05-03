@@ -48,6 +48,15 @@ export const TEAM_DEPARTMENT_KEYS_EXAMPLE = {
   },
 };
 
+export const TEAM_CREW_TYPE_KEYS_EXAMPLE = {
+  data: {
+    'CREW_ROLE/P': '회장',
+    'CREW_ROLE/VP': '부회장',
+    'CREW_ROLE/EA': '총무',
+    'CREW_ROLE/CREW': '일반 크루원',
+  },
+};
+
 export const ACTIVITY_LIST_EXAMPLE = {
   total: 10,
   data: [
