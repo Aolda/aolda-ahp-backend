@@ -138,14 +138,15 @@ export class TeamRealRepository implements TeamRepository {
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
   ): CrewListAggregate {
     const generations = extractGenerationNumbers(source.page);
+    const joinedGen = generations[0] ?? 0;
     const creatorId = source.page.created_by.id;
 
     return {
       // TODO(dummy): Notion 원본 ID -> API crewId 매핑 규칙이 아직 없어서 임시 순번을 사용합니다.
       crewId,
       source,
-      joinedGen: generations[0] ?? 0,
-      crewLog: this.buildCrewLog(generations, creatorId, crewRoleLookupMap),
+      joinedGen,
+      crewLog: this.buildCrewLog(generations, joinedGen, creatorId, crewRoleLookupMap),
       // TODO(dummy): 활동 수는 관련 데이터소스 조회 전까지 repository mock supplement 값입니다.
       totalActivities: 0,
       // TODO(dummy): 블로깅 수는 관련 데이터소스 조회 전까지 repository mock supplement 값입니다.
@@ -236,12 +237,14 @@ export class TeamRealRepository implements TeamRepository {
 
   private buildCrewLog(
     crewGenerations: number[],
+    joinedGen: number,
     creatorId: string,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
   ): CrewListAggregate['crewLog'] {
+    // 입회 기수 이전의 임원 이력은 현재 crew page 기준 이력으로 간주하지 않습니다.
     // lookup에 존재하는 기수는 임원 이력으로 대체하고, 나머지 기수만 일반 활동회원 이력으로 보완합니다.
     const executiveRecords = (crewRoleLookupMap.get(creatorId) ?? [])
-      .filter((record) => record.generation !== null)
+      .filter((record) => record.generation !== null && record.generation >= joinedGen)
       .map((record) => ({
         generation: record.generation as number,
         type: this.mapExecutiveRole(record.rawRole),
