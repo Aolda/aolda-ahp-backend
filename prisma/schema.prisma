@@ -12,3 +12,11 @@ model ExampleRecord {
   title     String
   createdAt DateTime @default(now())
 }
+
+model CrewProfileImageCache {
+  notionPageId String   @id
+  imageUrl     String?
+  lastSyncedAt DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

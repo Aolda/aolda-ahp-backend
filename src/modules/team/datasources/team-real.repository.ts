@@ -1,4 +1,5 @@
 import type { Client } from '@notionhq/client';
+import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints/common';
 import type {
   ActivityListResponse,
   CrewDetailResponse,
@@ -29,6 +30,10 @@ import {
 import { CrewGenerationMappingFetcher } from '../notion/fetchers/crew-generation-mapping.fetcher';
 import { ActivityFetcher } from '../notion/fetchers/activity.fetcher';
 import { CrewFetcher } from '../notion/fetchers/crew.fetcher';
+import {
+  CrewProfileImageCacheRepository,
+  type CrewProfileImageCacheRecord,
+} from './crew-profile-image-cache.repository';
 import { CrewRoleLookupFetcher } from '../notion/fetchers/crew-role-lookup.fetcher';
 import { parseActivityPage } from '../notion/parsers/activity-page.parser';
 import { parseCrewGenerationMappingPage } from '../notion/parsers/crew-generation-mapping-page.parser';
@@ -45,10 +50,12 @@ const DEFAULT_CREW_ROLE_LOOKUP_DATA_SOURCE_ID = '353a7bac-f955-8048-8e4d-000bdec
 const DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID = '355a7bac-f955-80da-b748-000b2233c7dd';
 const GENERAL_MEMBER_ROLE = 'CREW_ROLE/CREW';
 const UNKNOWN_CREW_TEAM = 'DUMMY_TEAM_NOT_FETCHED_YET';
+const PROFILE_IMAGE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 interface TeamRealDbConfig {
   notionClient: Client;
   notionTeamDbIds: { crew?: string; activity?: string; project?: string; crewRoleLookup?: string };
+  crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
 }
 
 export class TeamRealRepository implements TeamRepository {
@@ -56,8 +63,13 @@ export class TeamRealRepository implements TeamRepository {
   private readonly activityFetcher: ActivityFetcher;
   private readonly crewRoleLookupFetcher: CrewRoleLookupFetcher;
   private readonly crewGenerationMappingFetcher: CrewGenerationMappingFetcher;
+  private readonly crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
 
-  constructor({ notionClient, notionTeamDbIds }: TeamRealDbConfig) {
+  constructor({
+    notionClient,
+    notionTeamDbIds,
+    crewProfileImageCacheRepository,
+  }: TeamRealDbConfig) {
     if (!notionTeamDbIds.crew) throw new Error('NOTION_TEAM_DB_IDS must include crew:<id>');
     if (!notionTeamDbIds.activity) throw new Error('NOTION_TEAM_DB_IDS must include activity:<id>');
 
@@ -71,6 +83,7 @@ export class TeamRealRepository implements TeamRepository {
       notionClient,
       DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID,
     );
+    this.crewProfileImageCacheRepository = crewProfileImageCacheRepository;
   }
 
   async getCrewList(): Promise<CrewListResponse> {
@@ -81,9 +94,16 @@ export class TeamRealRepository implements TeamRepository {
     ]);
     const activePages = crewPages.filter(isCurrentActiveCrew);
     const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(crewPages, activityTermGenerationMap);
+    const profileImageUrlMap = await this.resolveCrewProfileImageUrlMap(activePages);
     const crewAggregates = await Promise.all(
       activePages.map((page, index) =>
-        this.buildCrewListAggregate(page, index + 1, crewRoleLookupMap, crewTeamHistoryMap),
+        this.buildCrewListAggregate(
+          page,
+          index + 1,
+          crewRoleLookupMap,
+          crewTeamHistoryMap,
+          profileImageUrlMap.get(page.id),
+        ),
       ),
     );
 
@@ -107,6 +127,7 @@ export class TeamRealRepository implements TeamRepository {
     ]);
     const activePages = crewPages.filter(isCurrentActiveCrew);
     const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(crewPages, activityTermGenerationMap);
+    const profileImageUrlMap = await this.resolveCrewProfileImageUrlMap(activePages);
     const targetIndex = Number(crewId) - 1;
     const targetPage = activePages[targetIndex];
 
@@ -119,6 +140,7 @@ export class TeamRealRepository implements TeamRepository {
       targetIndex + 1,
       crewRoleLookupMap,
       crewTeamHistoryMap,
+      profileImageUrlMap.get(targetPage.id),
     );
     return assembleCrewDetailResponse(detailAggregate);
   }
@@ -135,6 +157,16 @@ export class TeamRealRepository implements TeamRepository {
       ...TEAM_CREW_TYPE_KEYS_EXAMPLE,
       data: { ...CREW_TYPE_KEY_VALUES },
     };
+  }
+
+  async syncCrewProfileImageCache(): Promise<number> {
+    if (!this.crewProfileImageCacheRepository) {
+      return 0;
+    }
+
+    const records = await this.buildAllCrewProfileImageCacheRecords();
+    await this.crewProfileImageCacheRepository.upsertMany(records);
+    return records.length;
   }
 
   async getProjectList(): Promise<ProjectListResponse> {
@@ -160,8 +192,9 @@ export class TeamRealRepository implements TeamRepository {
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
     crewTeamHistoryMap: Map<string, Map<number, string>>,
+    profileImageUrl?: string | null,
   ): Promise<CrewListAggregate> {
-    const source = await this.crewFetcher.fetchPageSource(page);
+    const source = await this.crewFetcher.fetchPageSource(page, profileImageUrl);
     return this.composeCrewListAggregate(source, crewId, crewRoleLookupMap, crewTeamHistoryMap);
   }
 
@@ -199,8 +232,9 @@ export class TeamRealRepository implements TeamRepository {
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
     crewTeamHistoryMap: Map<string, Map<number, string>>,
+    profileImageUrl?: string | null,
   ): Promise<CrewDetailAggregate> {
-    const detailSource = await this.crewFetcher.fetchDetailSource(page);
+    const detailSource = await this.crewFetcher.fetchDetailSource(page, profileImageUrl);
     const baseAggregate = this.composeCrewListAggregate(
       detailSource,
       crewId,
@@ -381,6 +415,66 @@ export class TeamRealRepository implements TeamRepository {
     }
 
     return crewTeamByGeneration;
+  }
+
+  private async resolveCrewProfileImageUrlMap(
+    pages: PageObjectResponse[],
+  ): Promise<Map<string, string | null>> {
+    if (!this.crewProfileImageCacheRepository || pages.length === 0) {
+      return new Map();
+    }
+
+    const cachedMap = await this.crewProfileImageCacheRepository.findManyByPageIds(
+      pages.map((page) => page.id),
+    );
+    const staleBefore = new Date(Date.now() - PROFILE_IMAGE_CACHE_TTL_MS);
+    const profileImageUrlMap = new Map<string, string | null>();
+    const pagesToRefresh = pages.filter((page) => {
+      const cached = cachedMap.get(page.id);
+
+      if (cached && cached.lastSyncedAt >= staleBefore) {
+        profileImageUrlMap.set(page.id, cached.imageUrl);
+        return false;
+      }
+
+      return true;
+    });
+
+    if (pagesToRefresh.length === 0) {
+      return profileImageUrlMap;
+    }
+
+    const refreshedRecords = await this.fetchCrewProfileImageCacheRecords(pagesToRefresh);
+    await this.crewProfileImageCacheRepository.upsertMany(refreshedRecords);
+
+    for (const record of refreshedRecords) {
+      profileImageUrlMap.set(record.notionPageId, record.imageUrl);
+    }
+
+    return profileImageUrlMap;
+  }
+
+  async buildAllCrewProfileImageCacheRecords(): Promise<CrewProfileImageCacheRecord[]> {
+    const pages = await this.crewFetcher.fetchPages();
+    return this.fetchCrewProfileImageCacheRecords(pages);
+  }
+
+  private async fetchCrewProfileImageCacheRecords(
+    pages: Array<Pick<PageObjectResponse, 'id'>>,
+  ): Promise<CrewProfileImageCacheRecord[]> {
+    const lastSyncedAt = new Date();
+    const records: CrewProfileImageCacheRecord[] = [];
+
+    for (const page of pages) {
+      const imageUrl = await this.crewFetcher.fetchProfileImageUrl(page.id);
+      records.push({
+        notionPageId: page.id,
+        imageUrl,
+        lastSyncedAt,
+      });
+    }
+
+    return records;
   }
 
   private mapExecutiveRole(rawRole: string | null): string {

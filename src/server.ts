@@ -11,11 +11,14 @@ import { InternalExampleMockRepository } from './modules/internal-example/dataso
 import { InternalExamplePrismaRepository } from './modules/internal-example/datasources/internal-example-prisma.repository';
 import { registerInternalExampleRoutes } from './modules/internal-example/routes/internal-example.route';
 import { InternalExampleService } from './modules/internal-example/services/internal-example.service';
+import { CrewProfileImageCacheRepository } from './modules/team/datasources/crew-profile-image-cache.repository';
 import { TeamMockRepository } from './modules/team/datasources/team-mock.repository';
 import { TeamRealRepository } from './modules/team/datasources/team-real.repository';
+import { CrewProfileImageSyncJob } from './modules/team/jobs/crew-profile-image-sync.job';
 import { TeamRepository } from './modules/team/repositories/team.repository';
 import { TeamQueryService } from './modules/team/services/team-query.service';
 import { createNotionClient } from './util/notion/client';
+import { getPrismaClient } from './util/prisma';
 import { registerCloudRoutes } from './routes/cloud';
 import { registerHealthRoutes } from './routes/health';
 import { registerTeamRoutes } from './routes/team';
@@ -24,8 +27,11 @@ const PROJECT_NAME = 'aolda-ahp-backend';
 const VERSION = '0.1.0';
 const DEFAULT_PORT = 8001;
 
-function createTeamQueryService(env: AppEnv): TeamQueryService {
+function createTeamQueryService(
+  env: AppEnv,
+): { teamQueryService: TeamQueryService; teamRealRepository?: TeamRealRepository } {
   let repository: TeamRepository;
+  let teamRealRepository: TeamRealRepository | undefined;
 
   if (env.useMockData) {
     repository = new TeamMockRepository();
@@ -33,13 +39,20 @@ function createTeamQueryService(env: AppEnv): TeamQueryService {
     if (!env.notion.apiKey) {
       throw new Error('NOTION_API_KEY must be set when USE_MOCK_DATA=false');
     }
-    repository = new TeamRealRepository({
+    teamRealRepository = new TeamRealRepository({
       notionClient: createNotionClient(env.notion.apiKey),
       notionTeamDbIds: env.notion.teamDbIds,
+      crewProfileImageCacheRepository: env.databaseUrl
+        ? new CrewProfileImageCacheRepository(getPrismaClient())
+        : undefined,
     });
+    repository = teamRealRepository;
   }
 
-  return new TeamQueryService(repository);
+  return {
+    teamQueryService: new TeamQueryService(repository),
+    teamRealRepository,
+  };
 }
 
 function createCloudQueryService(useMockData: boolean): CloudQueryService {
@@ -58,6 +71,7 @@ function createInternalExampleService(useMockData: boolean): InternalExampleServ
 export async function buildApp(): Promise<FastifyInstance> {
   const env = readAppEnv();
   const app = Fastify({ logger: true, disableRequestLogging: true });
+  let crewProfileImageSyncJob: CrewProfileImageSyncJob | undefined;
 
   await app.register(cors, {
     origin: env.cors.origins.includes('*') ? true : env.cors.origins,
@@ -75,10 +89,6 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   });
 
-  await app.register(swaggerUi, {
-    routePrefix: '/docs',
-  });
-
   app.addHook('onRequest', async (request) => {
     app.log.info(`${request.ip} -> "${request.method} ${request.url}"`);
   });
@@ -87,9 +97,13 @@ export async function buildApp(): Promise<FastifyInstance> {
     app.log.info(`${request.ip} <- "${request.method} ${request.url}" ${reply.statusCode}`);
   });
 
-  const teamQueryService = createTeamQueryService(env);
+  const { teamQueryService, teamRealRepository } = createTeamQueryService(env);
   const cloudQueryService = createCloudQueryService(env.useMockData);
   const internalExampleService = createInternalExampleService(env.useMockData);
+
+  if (teamRealRepository && env.databaseUrl) {
+    crewProfileImageSyncJob = new CrewProfileImageSyncJob(teamRealRepository, app.log);
+  }
 
   await registerHealthRoutes(app);
   await registerTeamRoutes(app, { teamQueryService });
@@ -100,6 +114,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   }
 
   app.get('/openapi.json', async () => app.swagger());
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: {
+      docExpansion: 'list',
+      filter: true,
+    },
+  });
 
   app.addHook('onReady', async () => {
     app.log.info(`Allowed env keys: ${ALLOWED_ENV_KEYS.join(', ')}`);
@@ -122,6 +144,16 @@ export async function buildApp(): Promise<FastifyInstance> {
       },
       'Applied env values',
     );
+
+    crewProfileImageSyncJob?.start();
+  });
+
+  app.addHook('onClose', async () => {
+    crewProfileImageSyncJob?.stop();
+
+    if (env.databaseUrl) {
+      await getPrismaClient().$disconnect();
+    }
   });
 
   return app;

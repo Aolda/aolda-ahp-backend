@@ -244,7 +244,8 @@ http://localhost:8001/openapi.json
   - `true`: mock datasource 사용(기본)
   - `false`: prisma datasource 사용(현재는 동일 더미 반환)
 - `DATABASE_URL`
-  - Prisma 연동용 DB 연결 문자열
+  - PostgreSQL 연결 문자열
+  - 현재는 `crew` 프로필 이미지 URL 캐시 저장소로 사용합니다.
 - `NOTION_API_KEY`
   - Notion API 호출용 integration secret
 - `NOTION_TEAM_DB_IDS`
@@ -279,9 +280,18 @@ CORS_ALLOW_ORIGINS=* npm run dev
 
 ```bash
 npm run prisma:generate
+npm run prisma:push
 npm run prisma:migrate:dev
 npm run prisma:studio
 ```
+
+프로필 이미지 캐시를 수동으로 한 번 동기화하려면:
+
+```bash
+npm run team:profile-image:sync
+```
+
+`USE_MOCK_DATA=false` 이고 `DATABASE_URL`이 설정되어 있으면, 서버는 시작 후 즉시 한 번 동기화하고 이후 12시간마다 프로필 이미지 URL 캐시를 갱신합니다.
 
 ## 8) 신규 API/로직 추가 방법
 

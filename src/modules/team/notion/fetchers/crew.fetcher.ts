@@ -16,20 +16,31 @@ export class CrewFetcher {
     return this.fetchAllPages();
   }
 
-  async fetchPageSource(page: PageObjectResponse): Promise<CrewPageSource> {
+  async fetchPageSource(
+    page: PageObjectResponse,
+    profileImageUrl?: string | null,
+  ): Promise<CrewPageSource> {
     return {
       page,
-      profileImageUrl: await this.findFirstImageUrl(page.id),
+      profileImageUrl:
+        profileImageUrl === undefined ? await this.fetchProfileImageUrl(page.id) : profileImageUrl,
     };
   }
 
-  async fetchDetailSource(page: PageObjectResponse): Promise<CrewDetailSource> {
-    const pageSource = await this.fetchPageSource(page);
+  async fetchDetailSource(
+    page: PageObjectResponse,
+    profileImageUrl?: string | null,
+  ): Promise<CrewDetailSource> {
+    const pageSource = await this.fetchPageSource(page, profileImageUrl);
 
     return {
       ...pageSource,
       description: await this.fetchCrewDescription(page.id),
     };
+  }
+
+  async fetchProfileImageUrl(pageId: string): Promise<string | null> {
+    return this.findFirstImageUrl(pageId);
   }
 
   private async fetchAllPages(): Promise<PageObjectResponse[]> {
