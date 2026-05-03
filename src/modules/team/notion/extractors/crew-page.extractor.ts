@@ -33,9 +33,12 @@ export function extractCrewEmail(page: PageObjectResponse): string {
 }
 
 export function extractProfileAccountIds(page: PageObjectResponse): string[] {
-  const people = (page.properties['계정(프로필)'] as { people?: Array<{ id?: string }> } | undefined)?.people;
+  const peopleProps = page.properties['계정(프로필)'] as ({ people?: Array<{ id?: string }> } | undefined);
+  const people = peopleProps?.people;
 
-  return (people ?? []).map((person) => person.id).filter((id): id is string => Boolean(id));
+  return (people ?? [])
+    .map((person) => person.id)
+    .filter((id): id is string => Boolean(id));
 }
 
 export function extractUnivJoinedYear(page: PageObjectResponse): string {
