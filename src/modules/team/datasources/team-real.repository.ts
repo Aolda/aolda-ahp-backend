@@ -48,19 +48,27 @@ import { CREW_DEPARTMENT_KEY_VALUES, CREW_TYPE_KEY_VALUES } from '../constants/c
 
 const DEFAULT_CREW_ROLE_LOOKUP_DATA_SOURCE_ID = '353a7bac-f955-8048-8e4d-000bdec7a591';
 const DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID = '355a7bac-f955-80da-b748-000b2233c7dd';
+const DEFAULT_STUDY_DATA_SOURCE_ID = '457a7bac-f955-822a-9359-0706ae009fca';
 const GENERAL_MEMBER_ROLE = 'CREW_ROLE/CREW';
 const UNKNOWN_CREW_TEAM = 'DUMMY_TEAM_NOT_FETCHED_YET';
 const PROFILE_IMAGE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 interface TeamRealDbConfig {
   notionClient: Client;
-  notionTeamDbIds: { crew?: string; activity?: string; project?: string; crewRoleLookup?: string };
+  notionTeamDbIds: {
+    crew?: string;
+    activity?: string;
+    study?: string;
+    project?: string;
+    crewRoleLookup?: string;
+  };
   crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
 }
 
 export class TeamRealRepository implements TeamRepository {
   private readonly crewFetcher: CrewFetcher;
   private readonly activityFetcher: ActivityFetcher;
+  private readonly studyFetcher: ActivityFetcher;
   private readonly crewRoleLookupFetcher: CrewRoleLookupFetcher;
   private readonly crewGenerationMappingFetcher: CrewGenerationMappingFetcher;
   private readonly crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
@@ -75,6 +83,10 @@ export class TeamRealRepository implements TeamRepository {
 
     this.crewFetcher = new CrewFetcher(notionClient, notionTeamDbIds.crew);
     this.activityFetcher = new ActivityFetcher(notionClient, notionTeamDbIds.activity);
+    this.studyFetcher = new ActivityFetcher(
+      notionClient,
+      notionTeamDbIds.study ?? DEFAULT_STUDY_DATA_SOURCE_ID,
+    );
     this.crewRoleLookupFetcher = new CrewRoleLookupFetcher(
       notionClient,
       notionTeamDbIds.crewRoleLookup ?? DEFAULT_CREW_ROLE_LOOKUP_DATA_SOURCE_ID,
@@ -111,10 +123,7 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   async getActivityList(): Promise<ActivityListResponse> {
-    const pages = await this.activityFetcher.fetchPages();
-    const activityAggregates = await Promise.all(
-      pages.map((page, index) => this.buildActivityAggregate(page, index + 1)),
-    );
+    const activityAggregates = await this.fetchMergedActivityAggregates();
 
     return assembleActivityListResponse(activityAggregates);
   }
@@ -170,11 +179,8 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   async getProjectList(): Promise<ProjectListResponse> {
-    // 프로젝트 목록은 별도 project 데이터소스가 아니라 activity 원천 데이터에서 파생합니다.
-    const pages = await this.activityFetcher.fetchPages();
-    const activityAggregates = await Promise.all(
-      pages.map((page, index) => this.buildActivityAggregate(page, index + 1)),
-    );
+    // 프로젝트 목록은 별도 project 데이터소스가 아니라 activity/study 원천 데이터 병합 결과에서 파생합니다.
+    const activityAggregates = await this.fetchMergedActivityAggregates();
     const projectAggregates = activityAggregates.filter(
       (activity) => activity.activityType === 'ACTIVITY_TYPE/PROJECT',
     );
@@ -262,9 +268,28 @@ export class TeamRealRepository implements TeamRepository {
   private async buildActivityAggregate(
     page: Awaited<ReturnType<typeof this.activityFetcher.fetchPages>>[number],
     activityId: number,
+    fetcher: ActivityFetcher = this.activityFetcher,
   ): Promise<ActivityAggregate> {
-    const source = await this.activityFetcher.fetchPageSource(page);
+    const source = await fetcher.fetchPageSource(page);
     return this.composeActivityAggregate(source, activityId);
+  }
+
+  private async fetchMergedActivityAggregates(): Promise<ActivityAggregate[]> {
+    const [projectPages, studyPages] = await Promise.all([
+      this.activityFetcher.fetchPages(),
+      this.studyFetcher.fetchPages(),
+    ]);
+
+    const projectAggregates = await Promise.all(
+      projectPages.map((page, index) => this.buildActivityAggregate(page, index + 1, this.activityFetcher)),
+    );
+    const studyAggregates = await Promise.all(
+      studyPages.map((page, index) =>
+        this.buildActivityAggregate(page, projectPages.length + index + 1, this.studyFetcher),
+      ),
+    );
+
+    return [...projectAggregates, ...studyAggregates];
   }
 
   private composeActivityAggregate(source: ActivityPageSource, activityId: number): ActivityAggregate {

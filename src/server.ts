@@ -134,6 +134,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         NOTION_TEAM_DB_IDS: {
           crew: env.notion.teamDbIds.crew ?? '<unset>',
           activity: env.notion.teamDbIds.activity ?? '<unset>',
+          study: env.notion.teamDbIds.study ?? '<unset>',
           project: env.notion.teamDbIds.project ?? '<unset>',
           crewRoleLookup: env.notion.teamDbIds.crewRoleLookup ?? '<unset>',
         },

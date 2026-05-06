@@ -83,7 +83,7 @@ prisma/
   - Notion SDK 호출만 담당합니다.
   - `dataSources.query`, `blocks.children.list` 같은 I/O를 이 계층에 둡니다.
   - `CrewFetcher`는 `page + profileImageUrl + description` 같은 raw source만 반환합니다.
-  - `ActivityFetcher`도 `page` 기반 raw source 반환 인터페이스로 전환 중입니다.
+  - `ActivityFetcher`는 project/study datasource를 각각 조회한 뒤, repository가 메모리에서 병합할 수 있도록 `page` 기반 raw source를 반환합니다.
   - 임원 lookup처럼 별도 보조 데이터소스도 전용 fetcher로 분리해 조합합니다.
 - `src/modules/team/notion/extractors/*`
   - 이미 조회한 `page`/`block`에서 필요한 값을 읽는 순수 함수 계층입니다.
@@ -146,7 +146,9 @@ route/team.ts
 route/team.ts
   -> TeamQueryService
   -> TeamRealRepository
-  -> ActivityFetcher(raw sources)
+  -> ActivityFetcher(raw sources from project datasource)
+  -> ActivityFetcher(raw sources from study datasource)
+  -> repository merge in memory
   -> repository aggregate composition
   -> activity-page.parser
   -> activity-response.assembler or project-response.assembler
@@ -157,11 +159,11 @@ route/team.ts
 - `GET /team/crew`
   - `route -> service -> TeamRealRepository -> CrewFetcher(raw sources) -> extractors -> repository aggregate composition -> crew-response.assembler`
 - `GET /team/activity`
-  - `route -> service -> TeamRealRepository -> ActivityFetcher(raw sources) -> activity-page.parser -> repository aggregate composition -> activity-response.assembler`
+  - `route -> service -> TeamRealRepository -> project/study ActivityFetcher(raw sources) -> repository merge in memory -> activity-page.parser -> repository aggregate composition -> activity-response.assembler`
 - `GET /team/project`
-  - `route -> service -> TeamRealRepository -> ActivityFetcher(raw sources) -> activity-page.parser -> repository aggregate composition -> project-response.assembler`
+  - `route -> service -> TeamRealRepository -> project/study ActivityFetcher(raw sources) -> repository merge in memory -> activity-page.parser -> repository aggregate composition -> project-response.assembler`
 
-즉 현재 `project list`는 별도 Notion project datasource를 직접 읽지 않고, activity datasource에서 `ACTIVITY_TYPE/PROJECT`로 판별된 항목만 추려 구성합니다.
+즉 현재 `activity list`는 project datasource와 study datasource를 각각 읽은 뒤 메모리에서 병합하고, `project list`는 그 병합 결과 중 `ACTIVITY_TYPE/PROJECT`로 판별된 항목만 추려 구성합니다.
 
 ## 4) 공개 API 목록
 
@@ -249,8 +251,9 @@ http://localhost:8001/openapi.json
 - `NOTION_API_KEY`
   - Notion API 호출용 integration secret
 - `NOTION_TEAM_DB_IDS`
-  - `crew:<id>,activity:<id>,project:<id>,crew_role_lookup:<id>` 형식의 key-value 문자열
+  - `crew:<id>,activity:<id>,study:<id>,project:<id>,crew_role_lookup:<id>` 형식의 key-value 문자열
   - 현재 구현 기준 필수값은 `crew`, `activity`입니다.
+  - `study`를 넣으면 `/team/activity` 병합 시 해당 datasource를 사용하고, 없으면 코드에 내장된 기본 study datasource ID를 사용합니다.
   - `project`는 향후 project detail 구현용 예약 키로 보고 있으며, 현 시점의 project list 호출에는 사용하지 않습니다.
   - `crew_role_lookup`는 crewLog 임원 정보 lookup용 보조 데이터소스입니다.
 

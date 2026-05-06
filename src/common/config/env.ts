@@ -69,6 +69,7 @@ export interface AppEnv {
     teamDbIds: {
       crew?: string;
       activity?: string;
+      study?: string;
       project?: string;
       crewRoleLookup?: string;
     };
@@ -93,6 +94,7 @@ export function readAppEnv(): AppEnv {
       teamDbIds: {
         crew: rawTeamDbIds['crew'],
         activity: rawTeamDbIds['activity'],
+        study: rawTeamDbIds['study'],
         project: rawTeamDbIds['project'],
         crewRoleLookup: rawTeamDbIds['crew_role_lookup'],
       },
