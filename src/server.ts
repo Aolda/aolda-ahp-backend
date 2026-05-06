@@ -12,6 +12,7 @@ import { InternalExamplePrismaRepository } from './modules/internal-example/data
 import { registerInternalExampleRoutes } from './modules/internal-example/routes/internal-example.route';
 import { InternalExampleService } from './modules/internal-example/services/internal-example.service';
 import { CrewProfileImageCacheRepository } from './modules/team/datasources/crew-profile-image-cache.repository';
+import { TeamActivityMetadataRepository } from './modules/team/datasources/team-activity-metadata.repository';
 import { TeamMockRepository } from './modules/team/datasources/team-mock.repository';
 import { TeamRealRepository } from './modules/team/datasources/team-real.repository';
 import { CrewProfileImageSyncJob } from './modules/team/jobs/crew-profile-image-sync.job';
@@ -44,6 +45,9 @@ function createTeamQueryService(
       notionTeamDbIds: env.notion.teamDbIds,
       crewProfileImageCacheRepository: env.databaseUrl
         ? new CrewProfileImageCacheRepository(getPrismaClient())
+        : undefined,
+      teamActivityMetadataRepository: env.databaseUrl
+        ? new TeamActivityMetadataRepository(getPrismaClient())
         : undefined,
     });
     repository = teamRealRepository;

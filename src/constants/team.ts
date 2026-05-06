@@ -61,6 +61,7 @@ export const ACTIVITY_LIST_EXAMPLE = {
   total: 10,
   data: [
     {
+      activityId: 3,
       status: 'ACTIVITY_STATUS/RECRIUTING',
       startedAt: '2025-1',
       activityNames: {
@@ -73,22 +74,23 @@ export const ACTIVITY_LIST_EXAMPLE = {
         color: '#1E3A8A',
       },
       activityType: 'ACTIVITY_TYPE/PROJECT',
-      description: '실사용자를 위한 서비스 개선을 목표로 진행한 프로젝트입니다.',
+      description: null,
     },
     {
+      activityId: 11,
       status: 'ACTIVITY_STATUS/ONBOARDING',
-      startedAt: '2024-2',
+      startedAt: '2024-동계',
       activityNames: {
         ko: '리액트 스터디',
-        en: 'React Study',
-        brief: 'React',
+        en: null,
+        brief: null,
       },
       background: {
         url: 'https://cdn.aolda.io/activities/bg-2.jpg',
         color: '#0F766E',
       },
       activityType: 'ACTIVITY_TYPE/STUDY',
-      description: '기초부터 심화까지 단계별로 학습하는 프론트엔드 스터디입니다.',
+      description: null,
     },
   ],
 };
@@ -232,9 +234,9 @@ export const PROJECT_LIST_EXAMPLE = {
         startedAt: '2024-2',
         participantsCount: 18,
         activityNames: {
-          ko: '클라우드 비용 최적화',
-          en: 'Cloud Cost Optimization',
-          brief: 'Cloud Opt',
+          ko: 'OpenInfra Summit',
+          en: 'OpenInfra Summit',
+          brief: null,
         },
         background: {
           url: 'https://cdn.aolda.io/projects/bg-5.jpg',

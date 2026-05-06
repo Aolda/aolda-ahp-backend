@@ -10,5 +10,5 @@ export interface ActivityAggregate {
   participantsCount: number;
   activityNames: ActivityListItem['activityNames'];
   background: ActivityListItem['background'];
-  description: string;
+  description: ActivityListItem['description'];
 }

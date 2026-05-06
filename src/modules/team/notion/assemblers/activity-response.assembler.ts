@@ -3,6 +3,7 @@ import type { ActivityAggregate } from '../types/activity-aggregate';
 
 export function assembleActivityListResponse(activities: ActivityAggregate[]): ActivityListResponse {
   const data = activities.map((activity) => ({
+    activityId: activity.activityId,
     status: activity.status,
     startedAt: activity.startedAt,
     activityNames: activity.activityNames,

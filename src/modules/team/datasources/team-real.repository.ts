@@ -34,7 +34,13 @@ import {
   CrewProfileImageCacheRepository,
   type CrewProfileImageCacheRecord,
 } from './crew-profile-image-cache.repository';
+import {
+  TeamActivityMetadataRepository,
+  type TeamActivityMetadataRecord,
+  type TeamActivityMetadataUpsertInput,
+} from './team-activity-metadata.repository';
 import { CrewRoleLookupFetcher } from '../notion/fetchers/crew-role-lookup.fetcher';
+import { parseActivityMetadataSeed } from '../notion/parsers/activity-metadata-seed.parser';
 import { parseActivityPage } from '../notion/parsers/activity-page.parser';
 import { parseCrewGenerationMappingPage } from '../notion/parsers/crew-generation-mapping-page.parser';
 import {
@@ -63,6 +69,7 @@ interface TeamRealDbConfig {
     crewRoleLookup?: string;
   };
   crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
+  teamActivityMetadataRepository?: TeamActivityMetadataRepository;
 }
 
 export class TeamRealRepository implements TeamRepository {
@@ -72,11 +79,13 @@ export class TeamRealRepository implements TeamRepository {
   private readonly crewRoleLookupFetcher: CrewRoleLookupFetcher;
   private readonly crewGenerationMappingFetcher: CrewGenerationMappingFetcher;
   private readonly crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
+  private readonly teamActivityMetadataRepository?: TeamActivityMetadataRepository;
 
   constructor({
     notionClient,
     notionTeamDbIds,
     crewProfileImageCacheRepository,
+    teamActivityMetadataRepository,
   }: TeamRealDbConfig) {
     if (!notionTeamDbIds.crew) throw new Error('NOTION_TEAM_DB_IDS must include crew:<id>');
     if (!notionTeamDbIds.activity) throw new Error('NOTION_TEAM_DB_IDS must include activity:<id>');
@@ -96,6 +105,7 @@ export class TeamRealRepository implements TeamRepository {
       DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID,
     );
     this.crewProfileImageCacheRepository = crewProfileImageCacheRepository;
+    this.teamActivityMetadataRepository = teamActivityMetadataRepository;
   }
 
   async getCrewList(): Promise<CrewListResponse> {
@@ -269,30 +279,43 @@ export class TeamRealRepository implements TeamRepository {
     page: Awaited<ReturnType<typeof this.activityFetcher.fetchPages>>[number],
     activityId: number,
     fetcher: ActivityFetcher = this.activityFetcher,
+    metadata?: TeamActivityMetadataRecord,
   ): Promise<ActivityAggregate> {
     const source = await fetcher.fetchPageSource(page);
-    return this.composeActivityAggregate(source, activityId);
+    return this.composeActivityAggregate(source, activityId, metadata);
   }
 
   private async fetchMergedActivityAggregates(): Promise<ActivityAggregate[]> {
-    const [projectPages, studyPages] = await Promise.all([
-      this.activityFetcher.fetchPages(),
-      this.studyFetcher.fetchPages(),
-    ]);
+    const livePages = await this.fetchLiveActivityPages();
 
-    const projectAggregates = await Promise.all(
-      projectPages.map((page, index) => this.buildActivityAggregate(page, index + 1, this.activityFetcher)),
-    );
-    const studyAggregates = await Promise.all(
-      studyPages.map((page, index) =>
-        this.buildActivityAggregate(page, projectPages.length + index + 1, this.studyFetcher),
-      ),
-    );
+    if (!this.teamActivityMetadataRepository) {
+      return Promise.all(
+        livePages.map(({ page, fetcher }, index) =>
+          this.buildActivityAggregate(page, index + 1, fetcher),
+        ),
+      );
+    }
 
-    return [...projectAggregates, ...studyAggregates];
+    const metadataMap = await this.syncAndLoadActivityMetadata(livePages);
+    const visibleLivePages = livePages.filter(({ page }) => metadataMap.get(page.id)?.isVisible);
+
+    return Promise.all(
+      visibleLivePages.map(({ page, fetcher }) => {
+        const metadata = metadataMap.get(page.id);
+        if (!metadata) {
+          throw new Error(`Activity metadata not found for notion page ${page.id}`);
+        }
+
+        return this.buildActivityAggregate(page, metadata.id, fetcher, metadata);
+      }),
+    );
   }
 
-  private composeActivityAggregate(source: ActivityPageSource, activityId: number): ActivityAggregate {
+  private composeActivityAggregate(
+    source: ActivityPageSource,
+    activityId: number,
+    metadata?: TeamActivityMetadataRecord,
+  ): ActivityAggregate {
     const parsed = parseActivityPage(source.page);
 
     return {
@@ -303,11 +326,15 @@ export class TeamRealRepository implements TeamRepository {
       activityType: parsed.activityType,
       participantsCount: parsed.participantsCount,
       activityNames: {
-        ko: parsed.koName,
-        // TODO(dummy): 영문 activity 이름은 아직 별도 번역/명명 원천 데이터 미연동 상태라 repository mock supplement 값입니다.
-        en: `DUMMY_EN_NAME_FOR_${this.sanitizeForMockKey(parsed.koName)}`,
-        // TODO(dummy): brief 이름은 아직 별도 약칭 원천 데이터 미연동 상태라 repository mock supplement 값입니다.
-        brief: `DUMMY_BRIEF_FOR_${this.sanitizeForMockKey(parsed.koName)}`,
+        ko: metadata?.koName ?? parsed.koName,
+        // TODO(dummy): DB 메타데이터 저장소가 없을 때만 영문 activity 이름을 임시 더미로 노출합니다.
+        en: metadata
+          ? metadata.enName
+          : `DUMMY_EN_NAME_FOR_${this.sanitizeForMockKey(parsed.koName)}`,
+        // TODO(dummy): DB 메타데이터 저장소가 없을 때만 brief 이름을 임시 더미로 노출합니다.
+        brief: metadata
+          ? metadata.briefName
+          : `DUMMY_BRIEF_FOR_${this.sanitizeForMockKey(parsed.koName)}`,
       },
       background: {
         // TODO(dummy): page cover가 없으면 background 이미지는 repository mock supplement URL을 사용합니다.
@@ -315,8 +342,60 @@ export class TeamRealRepository implements TeamRepository {
         // TODO(dummy): background color는 현재 별도 디자인 메타데이터 미연동 상태라 repository mock supplement 값입니다.
         color: '#000000',
       },
-      // TODO(dummy): description은 page 본문 block 미조회 상태라 repository mock supplement 값입니다.
-      description: 'DUMMY_ACTIVITY_DESCRIPTION_NOT_FETCHED_YET',
+      // TODO(dummy): DB 메타데이터 저장소가 없을 때만 description 더미를 사용합니다.
+      description: metadata ? metadata.description : 'DUMMY_ACTIVITY_DESCRIPTION_NOT_FETCHED_YET',
+    };
+  }
+
+  private async fetchLiveActivityPages(): Promise<Array<{ page: PageObjectResponse; fetcher: ActivityFetcher }>> {
+    const [projectPages, studyPages] = await Promise.all([
+      this.activityFetcher.fetchPages(),
+      this.studyFetcher.fetchPages(),
+    ]);
+
+    return [
+      ...projectPages.map((page) => ({ page, fetcher: this.activityFetcher })),
+      ...studyPages.map((page) => ({ page, fetcher: this.studyFetcher })),
+    ];
+  }
+
+  private async syncAndLoadActivityMetadata(
+    livePages: Array<{ page: PageObjectResponse; fetcher: ActivityFetcher }>,
+  ): Promise<Map<string, TeamActivityMetadataRecord>> {
+    if (!this.teamActivityMetadataRepository) {
+      return new Map();
+    }
+
+    const notionPageIds = livePages.map(({ page }) => page.id);
+    const existingMap = await this.teamActivityMetadataRepository.findManyByNotionPageIds(notionPageIds);
+    const lastSeenAt = new Date();
+    const records = livePages.map(({ page }) =>
+      this.buildActivityMetadataRecord(page, existingMap.get(page.id), lastSeenAt),
+    );
+
+    await this.teamActivityMetadataRepository.upsertMany(records);
+    await this.teamActivityMetadataRepository.markInvisibleByMissingNotionPageIds(notionPageIds);
+
+    return this.teamActivityMetadataRepository.findManyByNotionPageIds(notionPageIds);
+  }
+
+  private buildActivityMetadataRecord(
+    page: PageObjectResponse,
+    existing: TeamActivityMetadataRecord | undefined,
+    lastSeenAt: Date,
+  ): TeamActivityMetadataUpsertInput {
+    const parsed = parseActivityPage(page);
+    const seeded = parseActivityMetadataSeed(page, parsed.activityType);
+
+    return {
+      notionPageId: page.id,
+      sourceType: parsed.activityType,
+      koName: existing ? existing.koName : seeded.koName,
+      enName: existing ? existing.enName : seeded.enName,
+      briefName: existing ? existing.briefName : seeded.briefName,
+      description: existing ? existing.description : null,
+      isVisible: true,
+      lastSeenAt,
     };
   }
 

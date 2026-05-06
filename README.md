@@ -123,6 +123,7 @@ prisma/
 - `assembler`는 최종 REST 응답을 조립합니다.
 - `repository`는 여러 fetch 결과를 조합해 하나의 조회 흐름을 만듭니다.
 - `repository`는 cross-source 값이나 아직 미연동된 값의 mock supplement도 이 단계에서 관리합니다.
+- `activity/project`의 `activityId`, `en`, `brief`, `description`은 `TeamActivityMetadata` 테이블을 source of truth로 사용하고, Notion은 활동 존재 여부와 live 상태 필드 확인용으로 사용합니다.
 - `crewLog`는 `Crew Book 계정(프로필) people -> 임원 lookup datasource의 people 필드` 매칭으로 role을 조합합니다.
 - `crewLog.department`는 `Crew Book 작성기수 -> 활동학기/기수 매핑 datasource -> 해당 기수의 Crew Book 팀 필드` 흐름으로 계산합니다.
 - lookup에 없는 기수는 일반 활동회원 이력으로 fallback 합니다.
