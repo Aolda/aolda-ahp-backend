@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 
 import {
+  ACTIVITY_METADATA_EXAMPLE,
   ACTIVITY_LIST_EXAMPLE,
   CREW_DETAIL_EXAMPLE,
   CREW_LIST_EXAMPLE,
@@ -11,6 +12,7 @@ import {
 } from '../constants/team';
 import { errorSchema, serviceUnavailableSchema, successSchema } from '../constants/schemas';
 import { TeamQueryService } from '../modules/team/services/team-query.service';
+import type { UpdateActivityMetadataInput } from '../modules/team/repositories/team.repository';
 
 interface TeamRouteDeps {
   teamQueryService: TeamQueryService;
@@ -47,6 +49,38 @@ export async function registerTeamRoutes(app: FastifyInstance, deps: TeamRouteDe
       } as any,
     },
     async () => teamQueryService.getActivityList(),
+  );
+
+  // TODO(auth): 관리자용 write endpoint이므로 차후 인증/인가 보호가 필요합니다.
+  app.patch(
+    '/team/activity/:activity_id/metadata',
+    {
+      schema: {
+        tags: ['team'],
+        summary: '활동 메타데이터 수정',
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          minProperties: 1,
+          properties: {
+            enName: { type: 'string', nullable: true },
+            briefName: { type: 'string', nullable: true },
+            description: { type: 'string', nullable: true },
+          },
+        },
+        response: {
+          200: successSchema(ACTIVITY_METADATA_EXAMPLE),
+          404: errorSchema('ERR_USER_NOT_FOUND', 'Not Found'),
+          503: serviceUnavailableSchema(['ERR_DB_REQ_FAILED']),
+        },
+      } as any,
+    },
+    async (
+      request: FastifyRequest<{
+        Params: { activity_id: string };
+        Body: UpdateActivityMetadataInput;
+      }>,
+    ) => teamQueryService.updateActivityMetadata(request.params.activity_id, request.body),
   );
 
   app.get(

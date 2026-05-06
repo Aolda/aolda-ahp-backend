@@ -1,4 +1,5 @@
 import {
+  ActivityMetadataResponse,
   ActivityListResponse,
   CrewDetailResponse,
   CrewListResponse,
@@ -7,6 +8,7 @@ import {
   TeamCrewTypeKeysResponse,
   TeamDepartmentKeysResponse,
   TeamRepository,
+  UpdateActivityMetadataInput,
 } from '../repositories/team.repository';
 
 export class TeamQueryService {
@@ -19,6 +21,13 @@ export class TeamQueryService {
 
   async getActivityList(): Promise<ActivityListResponse> {
     return this.teamRepository.getActivityList();
+  }
+
+  async updateActivityMetadata(
+    activityId: string,
+    input: UpdateActivityMetadataInput,
+  ): Promise<ActivityMetadataResponse> {
+    return this.teamRepository.updateActivityMetadata(activityId, input);
   }
 
   async getCrewDetail(crewId: string): Promise<CrewDetailResponse> {

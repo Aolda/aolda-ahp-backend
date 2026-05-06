@@ -1,6 +1,7 @@
 import type { Client } from '@notionhq/client';
 import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints/common';
 import type {
+  ActivityMetadataResponse,
   ActivityListResponse,
   CrewDetailResponse,
   CrewListResponse,
@@ -9,6 +10,7 @@ import type {
   TeamCrewTypeKeysResponse,
   TeamDepartmentKeysResponse,
   TeamRepository,
+  UpdateActivityMetadataInput,
 } from '../repositories/team.repository';
 import { TEAM_CREW_TYPE_KEYS_EXAMPLE, TEAM_DEPARTMENT_KEYS_EXAMPLE } from '../../../constants/team';
 import { assembleActivityListResponse } from '../notion/assemblers/activity-response.assembler';
@@ -136,6 +138,31 @@ export class TeamRealRepository implements TeamRepository {
     const activityAggregates = await this.fetchMergedActivityAggregates();
 
     return assembleActivityListResponse(activityAggregates);
+  }
+
+  async updateActivityMetadata(
+    activityId: string,
+    input: UpdateActivityMetadataInput,
+  ): Promise<ActivityMetadataResponse> {
+    if (!this.teamActivityMetadataRepository) {
+      throw new Error('DATABASE_URL must be set to update activity metadata');
+    }
+
+    const numericActivityId = Number(activityId);
+    if (!Number.isInteger(numericActivityId) || numericActivityId <= 0) {
+      throw new Error(`Invalid activity id: ${activityId}`);
+    }
+
+    const updated = await this.teamActivityMetadataRepository.updateMetadataByActivityId(
+      numericActivityId,
+      input,
+    );
+
+    if (!updated) {
+      throw new Error(`Activity metadata not found: ${activityId}`);
+    }
+
+    return this.toActivityMetadataResponse(updated);
   }
 
   async getCrewDetail(crewId: string): Promise<CrewDetailResponse> {
@@ -396,6 +423,21 @@ export class TeamRealRepository implements TeamRepository {
       description: existing ? existing.description : null,
       isVisible: true,
       lastSeenAt,
+    };
+  }
+
+  private toActivityMetadataResponse(
+    metadata: TeamActivityMetadataRecord,
+  ): ActivityMetadataResponse {
+    return {
+      activityId: metadata.id,
+      activityNames: {
+        ko: metadata.koName,
+        en: metadata.enName,
+        brief: metadata.briefName,
+      },
+      description: metadata.description,
+      isVisible: metadata.isVisible,
     };
   }
 

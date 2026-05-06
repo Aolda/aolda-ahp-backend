@@ -177,6 +177,9 @@ route/team.ts
 - `GET /team/crewtype`
   - 전체 `crewLog.type` key-value 사전을 반환합니다.
 - `GET /team/activity`
+- `PATCH /team/activity/:activity_id/metadata`
+  - `enName`, `briefName`, `description`을 DB 메타데이터 기준으로 수정합니다.
+  - 현재는 인증/인가가 붙지 않은 상태이므로 운영 적용 전 보호 장치가 필요합니다.
 - `GET /team/crew/:crew_id`
 - `GET /team/project`
 - `GET /team/project/:project_id`

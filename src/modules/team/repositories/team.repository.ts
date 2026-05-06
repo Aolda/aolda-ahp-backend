@@ -96,6 +96,19 @@ export interface ProjectListResponse {
   };
 }
 
+export interface UpdateActivityMetadataInput {
+  enName?: string | null;
+  briefName?: string | null;
+  description?: string | null;
+}
+
+export interface ActivityMetadataResponse {
+  activityId: number;
+  activityNames: ActivityNameSet;
+  description: string | null;
+  isVisible: boolean;
+}
+
 export interface CrewListResponse {
   total: number;
   keys: CrewResponseKeys;
@@ -133,6 +146,10 @@ export interface TeamRepository {
   // TODO: 실제 쿼리 파라미터(generation/role/page 등)를 도메인 스펙에 맞춰 확장하세요.
   getCrewList(): Promise<CrewListResponse>;
   getActivityList(): Promise<ActivityListResponse>;
+  updateActivityMetadata(
+    activityId: string,
+    input: UpdateActivityMetadataInput,
+  ): Promise<ActivityMetadataResponse>;
   getCrewDetail(crewId: string): Promise<CrewDetailResponse>;
   getDepartmentKeys(): Promise<TeamDepartmentKeysResponse>;
   getCrewTypeKeys(): Promise<TeamCrewTypeKeysResponse>;

@@ -95,6 +95,23 @@ export const ACTIVITY_LIST_EXAMPLE = {
   ],
 };
 
+export const ACTIVITY_METADATA_UPDATE_BODY_EXAMPLE = {
+  enName: 'OpenInfra Summit',
+  briefName: null,
+  description: 'OpenInfra 관련 학습/행사 맥락을 소개하는 관리자 입력 문구입니다.',
+};
+
+export const ACTIVITY_METADATA_EXAMPLE = {
+  activityId: 5,
+  activityNames: {
+    ko: 'OpenInfra Summit',
+    en: 'OpenInfra Summit',
+    brief: null,
+  },
+  description: 'OpenInfra 관련 학습/행사 맥락을 소개하는 관리자 입력 문구입니다.',
+  isVisible: true,
+};
+
 export const CREW_DETAIL_EXAMPLE = {
   crewId: 15,
   profile: { url: 'https://cdn.aolda.io/profiles/crew-15.jpg' },

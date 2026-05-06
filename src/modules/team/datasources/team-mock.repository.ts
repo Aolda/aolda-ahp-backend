@@ -1,4 +1,5 @@
 import {
+  ACTIVITY_METADATA_EXAMPLE,
   ACTIVITY_LIST_EXAMPLE,
   CREW_DETAIL_EXAMPLE,
   CREW_LIST_EXAMPLE,
@@ -8,6 +9,7 @@ import {
   TEAM_DEPARTMENT_KEYS_EXAMPLE,
 } from '../../../constants/team';
 import {
+  ActivityMetadataResponse,
   ActivityListResponse,
   CrewDetailResponse,
   CrewListResponse,
@@ -16,6 +18,7 @@ import {
   TeamCrewTypeKeysResponse,
   TeamDepartmentKeysResponse,
   TeamRepository,
+  UpdateActivityMetadataInput,
 } from '../repositories/team.repository';
 
 export class TeamMockRepository implements TeamRepository {
@@ -26,6 +29,22 @@ export class TeamMockRepository implements TeamRepository {
 
   async getActivityList(): Promise<ActivityListResponse> {
     return ACTIVITY_LIST_EXAMPLE;
+  }
+
+  async updateActivityMetadata(
+    activityId: string,
+    input: UpdateActivityMetadataInput,
+  ): Promise<ActivityMetadataResponse> {
+    return {
+      ...ACTIVITY_METADATA_EXAMPLE,
+      activityId: Number(activityId),
+      activityNames: {
+        ...ACTIVITY_METADATA_EXAMPLE.activityNames,
+        en: input.enName ?? ACTIVITY_METADATA_EXAMPLE.activityNames.en,
+        brief: input.briefName ?? ACTIVITY_METADATA_EXAMPLE.activityNames.brief,
+      },
+      description: input.description ?? ACTIVITY_METADATA_EXAMPLE.description,
+    };
   }
 
   async getCrewDetail(_crewId: string): Promise<CrewDetailResponse> {
