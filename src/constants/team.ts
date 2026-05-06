@@ -183,15 +183,15 @@ export const PROJECT_LIST_EXAMPLE = {
     filters: {
       status: {
         STATUS_RECRUITING: {
-          key: 'ACTIVITY_TYPE/RECRIUTING',
+          key: 'ACTIVITY_STATUS/RECRIUTING',
           value: '모집중',
         },
         STATUS_ONBOARDING: {
-          key: 'ACTIVITY_TYPE/ONBOARDING',
+          key: 'ACTIVITY_STATUS/ONBOARDING',
           value: '진행중',
         },
         STATUS_COMPLETED: {
-          key: 'ACTIVITY_TYPE/COMPLETED',
+          key: 'ACTIVITY_STATUS/COMPLETED',
           value: '완료',
         },
       },
@@ -213,7 +213,7 @@ export const PROJECT_LIST_EXAMPLE = {
     projects: [
       {
         activityId: 3,
-        status: 'ACTIVITY_TYPE/RECRIUTING',
+        status: 'ACTIVITY_STATUS/RECRIUTING',
         startedAt: '2025-1',
         participantsCount: 22,
         activityNames: {
@@ -228,7 +228,7 @@ export const PROJECT_LIST_EXAMPLE = {
       },
       {
         activityId: 5,
-        status: 'ACTIVITY_TYPE/ONBOARDING',
+        status: 'ACTIVITY_STATUS/ONBOARDING',
         startedAt: '2024-2',
         participantsCount: 18,
         activityNames: {

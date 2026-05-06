@@ -90,12 +90,18 @@ function buildSeasonFilters(projects: ProjectItem[]): ProjectListResponse['data'
 
 function mapStatusLabel(status: string): string {
   switch (status) {
+    case 'ACTIVITY_STATUS/PREPARING':
+      return '준비중';
     case 'ACTIVITY_STATUS/RECRIUTING':
       return '모집중';
     case 'ACTIVITY_STATUS/ONBOARDING':
       return '진행중';
     case 'ACTIVITY_STATUS/COMPLETED':
       return '완료';
+    case 'ACTIVITY_STATUS/STANDBY':
+      return '보류';
+    case 'ACTIVITY_STATUS/CANCELLED':
+      return '취소';
     default:
       // TODO(mock): 정의되지 않은 status label은 원본 코드를 그대로 노출합니다.
       return status;
@@ -103,13 +109,18 @@ function mapStatusLabel(status: string): string {
 }
 
 function mapSeasonLabel(startedAt: string): string {
-  const [year, semester] = startedAt.split('-');
-  if (!year || !semester) {
+  const normalized = startedAt.trim();
+  const match = normalized.match(/^(\d{2,4})-(1|2|동계|하계)$/);
+
+  if (!match) {
     // TODO(mock): startedAt 형식이 예상과 다르면 원본 값을 그대로 노출합니다.
     return startedAt;
   }
 
-  return `${year}학년도 ${semester}학기`;
+  const [, yearToken, seasonToken] = match;
+  const fullYear = yearToken.length === 2 ? `20${yearToken}` : yearToken;
+
+  return `${fullYear}학년도 ${seasonToken}학기`;
 }
 
 function sanitizeFilterKey(value: string): string {
