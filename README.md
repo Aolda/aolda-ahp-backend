@@ -98,7 +98,8 @@ prisma/
   - `activity/project`도 parser가 page를 해석하고, repository가 mock supplement와 aggregate를 조합한 뒤 assembler가 응답을 만듭니다.
 - `prisma/schema.prisma`
   - Prisma 스키마 파일입니다.
-  - 현재는 최소 예시 모델만 두고, 도메인 모델은 추후 확장용으로 남겨두었습니다.
+  - 현재는 `CrewProfileImageCache`, `TeamActivityMetadata` 같은 운영 보조 테이블이 포함되어 있습니다.
+  - `TeamActivityMetadata`는 team 활동의 안정적인 `activityId`와 관리자 보정 메타데이터를 저장하는 용도입니다.
 - `src/constants/*`
   - 현재 공개 API 응답 형식(오탈자 키 포함)을 보존하기 위한 고정 예시 데이터/스키마입니다.
 
@@ -247,7 +248,7 @@ http://localhost:8001/openapi.json
   - `false`: prisma datasource 사용(현재는 동일 더미 반환)
 - `DATABASE_URL`
   - PostgreSQL 연결 문자열
-  - 현재는 `crew` 프로필 이미지 URL 캐시 저장소로 사용합니다.
+  - 현재는 `crew` 프로필 이미지 URL 캐시와 `team activity` 메타데이터 저장소로 사용합니다.
 - `NOTION_API_KEY`
   - Notion API 호출용 integration secret
 - `NOTION_TEAM_DB_IDS`
