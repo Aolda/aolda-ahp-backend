@@ -1,0 +1,80 @@
+name: Build and Publish Docker Image
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - aolda_deploy.json
+  workflow_dispatch:
+
+env:
+  DOCKER_IMAGE: aolda/ahp_backend
+
+jobs:
+  docker:
+    name: Build and push
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create SHA-256 tag
+        id: image_tag
+        run: |
+          SHA256_TAG="$(printf '%s' "$GITHUB_SHA" | sha256sum | awk '{print $1}')"
+          echo "sha256=${SHA256_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.DOCKER_IMAGE }}:${{ steps.image_tag.outputs.sha256 }}
+            ${{ env.DOCKER_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Update deploy image
+        run: |
+          IMAGE="${{ env.DOCKER_IMAGE }}:${{ steps.image_tag.outputs.sha256 }}"
+          export IMAGE
+          node -e "
+          const fs = require('fs');
+          const path = 'aolda_deploy.json';
+          const deploy = JSON.parse(fs.readFileSync(path, 'utf8'));
+          for (const service of deploy.services ?? []) {
+            if (service.serviceId === 'aolda-ahp-backend') {
+              service.image = process.env.IMAGE;
+            }
+          }
+          fs.writeFileSync(path, JSON.stringify(deploy, null, 2) + '\n');
+          "
+
+      - name: Commit deploy image update
+        run: |
+          if git diff --quiet -- aolda_deploy.json; then
+            echo "No deploy image update needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add aolda_deploy.json
+          git commit -m "chore: update backend deploy image"
+          git push

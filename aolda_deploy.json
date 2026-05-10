@@ -1,0 +1,11 @@
+{
+  "services": [
+    {
+      "serviceId": "aolda-ahp-backend",
+      "image": "aolda/ahp_backend",
+      "port": 3000,
+      "replicas": 1,
+      "strategy": "Rollout"
+    }
+  ]
+}
