@@ -1,10 +1,8 @@
 import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints/common';
 
-const ACTIVE_GENERATION = '2026-1';
-
-export function isCurrentActiveCrew(page: PageObjectResponse): boolean {
-  const activeGeneration = (page.properties['작성기수'] as { select?: { name?: string } }).select?.name;
-  return activeGeneration === ACTIVE_GENERATION;
+export function isCurrentActiveCrew(page: PageObjectResponse, currentActivityTerm: string): boolean {
+  const crewWritingTerm = (page.properties['작성기수'] as { select?: { name?: string } }).select?.name;
+  return crewWritingTerm === currentActivityTerm;
 }
 
 export function extractCrewName(page: PageObjectResponse): string {

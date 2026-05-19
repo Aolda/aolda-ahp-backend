@@ -7,7 +7,6 @@ import {
   extractCrewName,
   extractUnivDepartment,
   extractUnivJoinedYear,
-  isCurrentActiveCrew,
 } from '../extractors/crew-page.extractor';
 import type { CrewPageSource } from '../types/crew-source';
 
@@ -19,6 +18,7 @@ type CrewLogItem = CrewListItem['crewLog'][number];
 export interface CrewListAggregate {
   crewId: number;
   source: CrewPageSource;
+  isActive: boolean;
   joinedGen: number;
   crewLog: CrewLogItem[];
   profileSupplement?: {
@@ -67,7 +67,7 @@ function assembleCrewListItem(crew: CrewListAggregate): CrewListItem {
     },
     crewName: extractCrewName(crew.source.page),
     crewLog: crew.crewLog,
-    isActive: isCurrentActiveCrew(crew.source.page),
+    isActive: crew.isActive,
     joinedGen: crew.joinedGen,
     univDepartment: crew.profileSupplement?.univDepartment ?? extractUnivDepartment(crew.source.page),
     univJoinedYear: normalizeUnivJoinedYear(

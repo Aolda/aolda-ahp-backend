@@ -3,6 +3,7 @@ import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoint
 export interface ParsedCrewGenerationMappingPage {
   activityTerm: string | null;
   generation: number | null;
+  status: string | null;
 }
 
 export function parseCrewGenerationMappingPage(
@@ -11,6 +12,7 @@ export function parseCrewGenerationMappingPage(
   return {
     activityTerm: extractActivityTerm(page),
     generation: extractGeneration(page),
+    status: extractStatus(page),
   };
 }
 
@@ -68,4 +70,33 @@ function extractGeneration(page: PageObjectResponse): number | null {
   }
 
   return null;
+}
+
+function extractStatus(page: PageObjectResponse): string | null {
+  const property = page.properties['상태'] as
+    | {
+        status?: { name?: string };
+        select?: { name?: string };
+        rich_text?: Array<{ plain_text?: string }>;
+        title?: Array<{ plain_text?: string }>;
+      }
+    | undefined;
+
+  const status = property?.status?.name?.trim();
+  if (status) {
+    return status;
+  }
+
+  const select = property?.select?.name?.trim();
+  if (select) {
+    return select;
+  }
+
+  const richText = property?.rich_text?.map((item) => item.plain_text ?? '').join('').trim();
+  if (richText) {
+    return richText;
+  }
+
+  const title = property?.title?.map((item) => item.plain_text ?? '').join('').trim();
+  return title || null;
 }

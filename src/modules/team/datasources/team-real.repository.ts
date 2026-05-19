@@ -73,6 +73,11 @@ interface CrewProfileSupplement {
   univJoinedYear: string | null;
 }
 
+interface ActivityTermGenerationContext {
+  generationMap: Map<string, number>;
+  currentActivityTerm: string;
+}
+
 interface TeamRealDbConfig {
   notionClient: Client;
   notionTeamDbIds: {
@@ -129,15 +134,20 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   async getCrewList(): Promise<CrewListResponse> {
-    const [crewPages, crewRoleLookupMap, activityTermGenerationMap, crewProfileMap] =
+    const [crewPages, crewRoleLookupMap, activityTermGenerationContext, crewProfileMap] =
       await Promise.all([
         this.crewFetcher.fetchPages(),
         this.fetchCrewRoleLookupMap(),
-        this.fetchActivityTermGenerationMap(),
+        this.fetchActivityTermGenerationContext(),
         this.fetchCrewProfileMap(),
       ]);
-    const activePages = crewPages.filter(isCurrentActiveCrew);
-    const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(crewPages, activityTermGenerationMap);
+    const activePages = crewPages.filter((page) =>
+      isCurrentActiveCrew(page, activityTermGenerationContext.currentActivityTerm),
+    );
+    const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(
+      crewPages,
+      activityTermGenerationContext.generationMap,
+    );
     const profileImageUrlMap = await this.resolveCrewProfileImageUrlMap(activePages);
     const crewAggregates = await Promise.all(
       activePages.map((page, index) =>
@@ -146,6 +156,7 @@ export class TeamRealRepository implements TeamRepository {
           index + 1,
           crewRoleLookupMap,
           crewTeamHistoryMap,
+          true,
           profileImageUrlMap.get(page.id),
           this.resolveCrewProfileSupplement(page, crewProfileMap),
         ),
@@ -187,15 +198,20 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   async getCrewDetail(crewId: string): Promise<CrewDetailResponse> {
-    const [crewPages, crewRoleLookupMap, activityTermGenerationMap, crewProfileMap] =
+    const [crewPages, crewRoleLookupMap, activityTermGenerationContext, crewProfileMap] =
       await Promise.all([
         this.crewFetcher.fetchPages(),
         this.fetchCrewRoleLookupMap(),
-        this.fetchActivityTermGenerationMap(),
+        this.fetchActivityTermGenerationContext(),
         this.fetchCrewProfileMap(),
       ]);
-    const activePages = crewPages.filter(isCurrentActiveCrew);
-    const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(crewPages, activityTermGenerationMap);
+    const activePages = crewPages.filter((page) =>
+      isCurrentActiveCrew(page, activityTermGenerationContext.currentActivityTerm),
+    );
+    const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(
+      crewPages,
+      activityTermGenerationContext.generationMap,
+    );
     const profileImageUrlMap = await this.resolveCrewProfileImageUrlMap(activePages);
     const targetIndex = Number(crewId) - 1;
     const targetPage = activePages[targetIndex];
@@ -209,6 +225,7 @@ export class TeamRealRepository implements TeamRepository {
       targetIndex + 1,
       crewRoleLookupMap,
       crewTeamHistoryMap,
+      true,
       profileImageUrlMap.get(targetPage.id),
       this.resolveCrewProfileSupplement(targetPage, crewProfileMap),
     );
@@ -259,6 +276,7 @@ export class TeamRealRepository implements TeamRepository {
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
     crewTeamHistoryMap: Map<string, Map<number, string>>,
+    isActive: boolean,
     profileImageUrl?: string | null,
     profileSupplement?: CrewProfileSupplement,
   ): Promise<CrewListAggregate> {
@@ -268,6 +286,7 @@ export class TeamRealRepository implements TeamRepository {
       crewId,
       crewRoleLookupMap,
       crewTeamHistoryMap,
+      isActive,
       profileSupplement,
     );
   }
@@ -277,6 +296,7 @@ export class TeamRealRepository implements TeamRepository {
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
     crewTeamHistoryMap: Map<string, Map<number, string>>,
+    isActive: boolean,
     profileSupplement?: CrewProfileSupplement,
   ): CrewListAggregate {
     const generations = extractGenerationNumbers(source.page);
@@ -287,6 +307,7 @@ export class TeamRealRepository implements TeamRepository {
       // TODO(dummy): Notion 원본 ID -> API crewId 매핑 규칙이 아직 없어서 임시 순번을 사용합니다.
       crewId,
       source,
+      isActive,
       joinedGen,
       profileSupplement,
       crewLog: this.buildCrewLog(
@@ -308,6 +329,7 @@ export class TeamRealRepository implements TeamRepository {
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
     crewTeamHistoryMap: Map<string, Map<number, string>>,
+    isActive: boolean,
     profileImageUrl?: string | null,
     profileSupplement?: CrewProfileSupplement,
   ): Promise<CrewDetailAggregate> {
@@ -317,6 +339,7 @@ export class TeamRealRepository implements TeamRepository {
       crewId,
       crewRoleLookupMap,
       crewTeamHistoryMap,
+      isActive,
       profileSupplement,
     );
 
@@ -496,12 +519,17 @@ export class TeamRealRepository implements TeamRepository {
     return lookupMap;
   }
 
-  private async fetchActivityTermGenerationMap(): Promise<Map<string, number>> {
+  private async fetchActivityTermGenerationContext(): Promise<ActivityTermGenerationContext> {
     const pages = await this.crewGenerationMappingFetcher.fetchPages();
     const activityTermGenerationMap = new Map<string, number>();
+    let currentActivityTerm: string | null = null;
 
     for (const page of pages) {
       const parsed = parseCrewGenerationMappingPage(page);
+      if (parsed.status === '현재기수' && parsed.activityTerm) {
+        currentActivityTerm = parsed.activityTerm;
+      }
+
       if (!parsed.activityTerm || parsed.generation === null) {
         continue;
       }
@@ -509,7 +537,14 @@ export class TeamRealRepository implements TeamRepository {
       activityTermGenerationMap.set(parsed.activityTerm, parsed.generation);
     }
 
-    return activityTermGenerationMap;
+    if (!currentActivityTerm) {
+      throw new Error('Current activity term not found in crew generation mapping datasource');
+    }
+
+    return {
+      generationMap: activityTermGenerationMap,
+      currentActivityTerm,
+    };
   }
 
   private async fetchCrewProfileMap(): Promise<Map<string, CrewProfileSupplement>> {
