@@ -14,6 +14,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "team:profile-image:sync": "tsx src/scripts/run-crew-profile-image-sync.ts"
   },
@@ -23,6 +24,7 @@
     "@fastify/swagger-ui": "^5.2.6",
     "@notionhq/client": "^5.16.0",
     "@prisma/client": "^6.4.1",
+    "prisma": "^6.4.1",
     "fastify": "^5.8.5"
   },
   "devDependencies": {
