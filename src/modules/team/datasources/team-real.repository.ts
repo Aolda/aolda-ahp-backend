@@ -22,6 +22,7 @@ import {
 } from '../notion/assemblers/crew-response.assembler';
 import { assembleProjectListResponse } from '../notion/assemblers/project-response.assembler';
 import {
+  extractCrewName,
   extractCrewTeamName,
   extractCrewEmail,
   extractGenerationNumbers,
@@ -30,6 +31,7 @@ import {
   isCurrentActiveCrew,
 } from '../notion/extractors/crew-page.extractor';
 import { CrewGenerationMappingFetcher } from '../notion/fetchers/crew-generation-mapping.fetcher';
+import { CrewProfileFetcher } from '../notion/fetchers/crew-profile.fetcher';
 import { ActivityFetcher } from '../notion/fetchers/activity.fetcher';
 import { CrewFetcher } from '../notion/fetchers/crew.fetcher';
 import {
@@ -46,6 +48,10 @@ import { parseActivityMetadataSeed } from '../notion/parsers/activity-metadata-s
 import { parseActivityPage } from '../notion/parsers/activity-page.parser';
 import { parseCrewGenerationMappingPage } from '../notion/parsers/crew-generation-mapping-page.parser';
 import {
+  parseCrewProfilePage,
+  type ParsedCrewProfilePage,
+} from '../notion/parsers/crew-profile-page.parser';
+import {
   parseCrewRoleLookupPage,
   type ParsedCrewRoleLookupPage,
 } from '../notion/parsers/crew-role-lookup-page.parser';
@@ -56,10 +62,16 @@ import { CREW_DEPARTMENT_KEY_VALUES, CREW_TYPE_KEY_VALUES } from '../constants/c
 
 const DEFAULT_CREW_ROLE_LOOKUP_DATA_SOURCE_ID = '353a7bac-f955-8048-8e4d-000bdec7a591';
 const DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID = '355a7bac-f955-80da-b748-000b2233c7dd';
+const DEFAULT_CREW_PROFILE_DATA_SOURCE_ID = '31fa7bac-f955-807d-a7af-000b8a0ab07f';
 const DEFAULT_STUDY_DATA_SOURCE_ID = '457a7bac-f955-822a-9359-0706ae009fca';
 const GENERAL_MEMBER_ROLE = 'CREW_ROLE/CREW';
 const UNKNOWN_CREW_TEAM = 'DUMMY_TEAM_NOT_FETCHED_YET';
 const PROFILE_IMAGE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+
+interface CrewProfileSupplement {
+  univDepartment: string | null;
+  univJoinedYear: string | null;
+}
 
 interface TeamRealDbConfig {
   notionClient: Client;
@@ -69,6 +81,7 @@ interface TeamRealDbConfig {
     study?: string;
     project?: string;
     crewRoleLookup?: string;
+    crewProfile?: string;
   };
   crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
   teamActivityMetadataRepository?: TeamActivityMetadataRepository;
@@ -80,6 +93,7 @@ export class TeamRealRepository implements TeamRepository {
   private readonly studyFetcher: ActivityFetcher;
   private readonly crewRoleLookupFetcher: CrewRoleLookupFetcher;
   private readonly crewGenerationMappingFetcher: CrewGenerationMappingFetcher;
+  private readonly crewProfileFetcher: CrewProfileFetcher;
   private readonly crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
   private readonly teamActivityMetadataRepository?: TeamActivityMetadataRepository;
 
@@ -106,16 +120,22 @@ export class TeamRealRepository implements TeamRepository {
       notionClient,
       DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID,
     );
+    this.crewProfileFetcher = new CrewProfileFetcher(
+      notionClient,
+      notionTeamDbIds.crewProfile ?? DEFAULT_CREW_PROFILE_DATA_SOURCE_ID,
+    );
     this.crewProfileImageCacheRepository = crewProfileImageCacheRepository;
     this.teamActivityMetadataRepository = teamActivityMetadataRepository;
   }
 
   async getCrewList(): Promise<CrewListResponse> {
-    const [crewPages, crewRoleLookupMap, activityTermGenerationMap] = await Promise.all([
-      this.crewFetcher.fetchPages(),
-      this.fetchCrewRoleLookupMap(),
-      this.fetchActivityTermGenerationMap(),
-    ]);
+    const [crewPages, crewRoleLookupMap, activityTermGenerationMap, crewProfileMap] =
+      await Promise.all([
+        this.crewFetcher.fetchPages(),
+        this.fetchCrewRoleLookupMap(),
+        this.fetchActivityTermGenerationMap(),
+        this.fetchCrewProfileMap(),
+      ]);
     const activePages = crewPages.filter(isCurrentActiveCrew);
     const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(crewPages, activityTermGenerationMap);
     const profileImageUrlMap = await this.resolveCrewProfileImageUrlMap(activePages);
@@ -127,6 +147,7 @@ export class TeamRealRepository implements TeamRepository {
           crewRoleLookupMap,
           crewTeamHistoryMap,
           profileImageUrlMap.get(page.id),
+          this.resolveCrewProfileSupplement(page, crewProfileMap),
         ),
       ),
     );
@@ -166,11 +187,13 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   async getCrewDetail(crewId: string): Promise<CrewDetailResponse> {
-    const [crewPages, crewRoleLookupMap, activityTermGenerationMap] = await Promise.all([
-      this.crewFetcher.fetchPages(),
-      this.fetchCrewRoleLookupMap(),
-      this.fetchActivityTermGenerationMap(),
-    ]);
+    const [crewPages, crewRoleLookupMap, activityTermGenerationMap, crewProfileMap] =
+      await Promise.all([
+        this.crewFetcher.fetchPages(),
+        this.fetchCrewRoleLookupMap(),
+        this.fetchActivityTermGenerationMap(),
+        this.fetchCrewProfileMap(),
+      ]);
     const activePages = crewPages.filter(isCurrentActiveCrew);
     const crewTeamHistoryMap = this.buildCrewTeamHistoryMap(crewPages, activityTermGenerationMap);
     const profileImageUrlMap = await this.resolveCrewProfileImageUrlMap(activePages);
@@ -187,6 +210,7 @@ export class TeamRealRepository implements TeamRepository {
       crewRoleLookupMap,
       crewTeamHistoryMap,
       profileImageUrlMap.get(targetPage.id),
+      this.resolveCrewProfileSupplement(targetPage, crewProfileMap),
     );
     return assembleCrewDetailResponse(detailAggregate);
   }
@@ -236,9 +260,16 @@ export class TeamRealRepository implements TeamRepository {
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
     crewTeamHistoryMap: Map<string, Map<number, string>>,
     profileImageUrl?: string | null,
+    profileSupplement?: CrewProfileSupplement,
   ): Promise<CrewListAggregate> {
     const source = await this.crewFetcher.fetchPageSource(page, profileImageUrl);
-    return this.composeCrewListAggregate(source, crewId, crewRoleLookupMap, crewTeamHistoryMap);
+    return this.composeCrewListAggregate(
+      source,
+      crewId,
+      crewRoleLookupMap,
+      crewTeamHistoryMap,
+      profileSupplement,
+    );
   }
 
   private composeCrewListAggregate(
@@ -246,6 +277,7 @@ export class TeamRealRepository implements TeamRepository {
     crewId: number,
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
     crewTeamHistoryMap: Map<string, Map<number, string>>,
+    profileSupplement?: CrewProfileSupplement,
   ): CrewListAggregate {
     const generations = extractGenerationNumbers(source.page);
     const joinedGen = generations[0] ?? 0;
@@ -256,6 +288,7 @@ export class TeamRealRepository implements TeamRepository {
       crewId,
       source,
       joinedGen,
+      profileSupplement,
       crewLog: this.buildCrewLog(
         generations,
         joinedGen,
@@ -276,6 +309,7 @@ export class TeamRealRepository implements TeamRepository {
     crewRoleLookupMap: Map<string, ParsedCrewRoleLookupPage[]>,
     crewTeamHistoryMap: Map<string, Map<number, string>>,
     profileImageUrl?: string | null,
+    profileSupplement?: CrewProfileSupplement,
   ): Promise<CrewDetailAggregate> {
     const detailSource = await this.crewFetcher.fetchDetailSource(page, profileImageUrl);
     const baseAggregate = this.composeCrewListAggregate(
@@ -283,6 +317,7 @@ export class TeamRealRepository implements TeamRepository {
       crewId,
       crewRoleLookupMap,
       crewTeamHistoryMap,
+      profileSupplement,
     );
 
     return {
@@ -475,6 +510,74 @@ export class TeamRealRepository implements TeamRepository {
     }
 
     return activityTermGenerationMap;
+  }
+
+  private async fetchCrewProfileMap(): Promise<Map<string, CrewProfileSupplement>> {
+    const pages = await this.crewProfileFetcher.fetchPages();
+    const crewProfileMap = new Map<string, CrewProfileSupplement>();
+
+    for (const page of pages) {
+      const parsed = parseCrewProfilePage(page);
+      const supplement = this.toCrewProfileSupplement(parsed);
+
+      for (const key of this.buildCrewProfileKeys(parsed)) {
+        crewProfileMap.set(key, supplement);
+      }
+    }
+
+    return crewProfileMap;
+  }
+
+  private resolveCrewProfileSupplement(
+    page: PageObjectResponse,
+    crewProfileMap: Map<string, CrewProfileSupplement>,
+  ): CrewProfileSupplement | undefined {
+    for (const profileAccountId of extractProfileAccountIds(page)) {
+      const supplement = crewProfileMap.get(this.toCrewProfileKey('person', profileAccountId));
+      if (supplement) {
+        return supplement;
+      }
+    }
+
+    const email = extractCrewEmail(page);
+    if (!email.includes('dummy-email-not-fetched-yet')) {
+      const supplement = crewProfileMap.get(this.toCrewProfileKey('email', email));
+      if (supplement) {
+        return supplement;
+      }
+    }
+
+    const name = extractCrewName(page);
+    if (name !== 'UNKNOWN_CREW_NAME') {
+      return crewProfileMap.get(this.toCrewProfileKey('name', name));
+    }
+
+    return undefined;
+  }
+
+  private toCrewProfileSupplement(parsed: ParsedCrewProfilePage): CrewProfileSupplement {
+    return {
+      univDepartment: parsed.univDepartment,
+      univJoinedYear: parsed.univJoinedYear,
+    };
+  }
+
+  private buildCrewProfileKeys(parsed: ParsedCrewProfilePage): string[] {
+    const keys = parsed.personIds.map((personId) => this.toCrewProfileKey('person', personId));
+
+    if (parsed.email) {
+      keys.push(this.toCrewProfileKey('email', parsed.email));
+    }
+
+    if (parsed.name) {
+      keys.push(this.toCrewProfileKey('name', parsed.name));
+    }
+
+    return keys;
+  }
+
+  private toCrewProfileKey(type: 'person' | 'email' | 'name', value: string): string {
+    return `${type}:${value.trim().toLowerCase()}`;
   }
 
   private buildCrewTeamHistoryMap(

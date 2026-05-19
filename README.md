@@ -256,11 +256,12 @@ http://localhost:8001/openapi.json
 - `NOTION_API_KEY`
   - Notion API 호출용 integration secret
 - `NOTION_TEAM_DB_IDS`
-  - `crew:<id>,activity:<id>,study:<id>,project:<id>,crew_role_lookup:<id>` 형식의 key-value 문자열
+  - `crew:<id>,activity:<id>,study:<id>,project:<id>,crew_role_lookup:<id>,crew_profile:<id>` 형식의 key-value 문자열
   - 현재 구현 기준 필수값은 `crew`, `activity`입니다.
   - `study`를 넣으면 `/team/activity` 병합 시 해당 datasource를 사용하고, 없으면 코드에 내장된 기본 study datasource ID를 사용합니다.
   - `project`는 향후 project detail 구현용 예약 키로 보고 있으며, 현 시점의 project list 호출에는 사용하지 않습니다.
   - `crew_role_lookup`는 crewLog 임원 정보 lookup용 보조 데이터소스입니다.
+  - `crew_profile`은 회원목록의 `univDepartment` / `univJoinedYear` 보강용 보조 데이터소스입니다. 없으면 코드에 내장된 기본 datasource ID를 사용합니다.
 
 예시:
 ```bash

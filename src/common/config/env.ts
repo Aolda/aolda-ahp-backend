@@ -72,6 +72,7 @@ export interface AppEnv {
       study?: string;
       project?: string;
       crewRoleLookup?: string;
+      crewProfile?: string;
     };
   };
 }
@@ -97,6 +98,7 @@ export function readAppEnv(): AppEnv {
         study: rawTeamDbIds['study'],
         project: rawTeamDbIds['project'],
         crewRoleLookup: rawTeamDbIds['crew_role_lookup'],
+        crewProfile: rawTeamDbIds['crew_profile'],
       },
     },
   };

@@ -21,6 +21,10 @@ export interface CrewListAggregate {
   source: CrewPageSource;
   joinedGen: number;
   crewLog: CrewLogItem[];
+  profileSupplement?: {
+    univDepartment?: string | null;
+    univJoinedYear?: string | null;
+  };
   totalActivities: number;
   totalBloggings: number;
 }
@@ -65,11 +69,18 @@ function assembleCrewListItem(crew: CrewListAggregate): CrewListItem {
     crewLog: crew.crewLog,
     isActive: isCurrentActiveCrew(crew.source.page),
     joinedGen: crew.joinedGen,
-    univDepartment: extractUnivDepartment(crew.source.page),
-    univJoinedYear: extractUnivJoinedYear(crew.source.page),
+    univDepartment: crew.profileSupplement?.univDepartment ?? extractUnivDepartment(crew.source.page),
+    univJoinedYear: normalizeUnivJoinedYear(
+      crew.profileSupplement?.univJoinedYear ?? extractUnivJoinedYear(crew.source.page),
+    ),
     totalActivities: crew.totalActivities,
     totalBloggings: crew.totalBloggings,
   };
+}
+
+function normalizeUnivJoinedYear(value: string): string {
+  const digits = value.replace(/[^0-9]/g, '');
+  return digits.length >= 4 ? digits.slice(0, 4) : '0000';
 }
 
 function collectCrewListKeys(data: CrewListResponse['data']): CrewListResponse['keys'] {

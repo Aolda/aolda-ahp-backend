@@ -141,6 +141,7 @@ export async function buildApp(): Promise<FastifyInstance> {
           study: env.notion.teamDbIds.study ?? '<unset>',
           project: env.notion.teamDbIds.project ?? '<unset>',
           crewRoleLookup: env.notion.teamDbIds.crewRoleLookup ?? '<unset>',
+          crewProfile: env.notion.teamDbIds.crewProfile ?? '<unset>',
         },
         CORS_ALLOW_ORIGINS: env.cors.origins,
         CORS_ALLOW_METHODS: env.cors.methods,
