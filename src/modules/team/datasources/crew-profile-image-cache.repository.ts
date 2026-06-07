@@ -3,6 +3,11 @@ import type { PrismaClient } from '@prisma/client';
 export interface CrewProfileImageCacheRecord {
   notionPageId: string;
   imageUrl: string | null;
+  sourceImageUrl: string | null;
+  localPath: string | null;
+  contentType: string | null;
+  contentHash: string | null;
+  fileSize: number | null;
   lastSyncedAt: Date;
 }
 
@@ -28,6 +33,11 @@ export class CrewProfileImageCacheRepository {
         {
           notionPageId: row.notionPageId,
           imageUrl: row.imageUrl,
+          sourceImageUrl: row.sourceImageUrl,
+          localPath: row.localPath,
+          contentType: row.contentType,
+          contentHash: row.contentHash,
+          fileSize: row.fileSize,
           lastSyncedAt: row.lastSyncedAt,
         },
       ]),
@@ -46,10 +56,20 @@ export class CrewProfileImageCacheRepository {
           create: {
             notionPageId: record.notionPageId,
             imageUrl: record.imageUrl,
+            sourceImageUrl: record.sourceImageUrl,
+            localPath: record.localPath,
+            contentType: record.contentType,
+            contentHash: record.contentHash,
+            fileSize: record.fileSize,
             lastSyncedAt: record.lastSyncedAt,
           },
           update: {
             imageUrl: record.imageUrl,
+            sourceImageUrl: record.sourceImageUrl,
+            localPath: record.localPath,
+            contentType: record.contentType,
+            contentHash: record.contentHash,
+            fileSize: record.fileSize,
             lastSyncedAt: record.lastSyncedAt,
           },
         }),

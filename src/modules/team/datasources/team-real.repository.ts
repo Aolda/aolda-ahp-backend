@@ -38,6 +38,7 @@ import {
   CrewProfileImageCacheRepository,
   type CrewProfileImageCacheRecord,
 } from './crew-profile-image-cache.repository';
+import { ProfileImageFileStorage } from './profile-image-file-storage';
 import {
   TeamActivityMetadataRepository,
   type TeamActivityMetadataRecord,
@@ -66,7 +67,6 @@ const DEFAULT_CREW_PROFILE_DATA_SOURCE_ID = '31fa7bac-f955-807d-a7af-000b8a0ab07
 const DEFAULT_STUDY_DATA_SOURCE_ID = '457a7bac-f955-822a-9359-0706ae009fca';
 const GENERAL_MEMBER_ROLE = 'CREW_ROLE/CREW';
 const UNKNOWN_CREW_TEAM = 'DUMMY_TEAM_NOT_FETCHED_YET';
-const PROFILE_IMAGE_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 interface CrewProfileSupplement {
   univDepartment: string | null;
@@ -89,6 +89,7 @@ interface TeamRealDbConfig {
     crewProfile?: string;
   };
   crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
+  profileImageFileStorage?: ProfileImageFileStorage;
   teamActivityMetadataRepository?: TeamActivityMetadataRepository;
 }
 
@@ -100,12 +101,14 @@ export class TeamRealRepository implements TeamRepository {
   private readonly crewGenerationMappingFetcher: CrewGenerationMappingFetcher;
   private readonly crewProfileFetcher: CrewProfileFetcher;
   private readonly crewProfileImageCacheRepository?: CrewProfileImageCacheRepository;
+  private readonly profileImageFileStorage?: ProfileImageFileStorage;
   private readonly teamActivityMetadataRepository?: TeamActivityMetadataRepository;
 
   constructor({
     notionClient,
     notionTeamDbIds,
     crewProfileImageCacheRepository,
+    profileImageFileStorage,
     teamActivityMetadataRepository,
   }: TeamRealDbConfig) {
     if (!notionTeamDbIds.crew) throw new Error('NOTION_TEAM_DB_IDS must include crew:<id>');
@@ -130,6 +133,7 @@ export class TeamRealRepository implements TeamRepository {
       notionTeamDbIds.crewProfile ?? DEFAULT_CREW_PROFILE_DATA_SOURCE_ID,
     );
     this.crewProfileImageCacheRepository = crewProfileImageCacheRepository;
+    this.profileImageFileStorage = profileImageFileStorage;
     this.teamActivityMetadataRepository = teamActivityMetadataRepository;
   }
 
@@ -711,28 +715,16 @@ export class TeamRealRepository implements TeamRepository {
     const cachedMap = await this.crewProfileImageCacheRepository.findManyByPageIds(
       pages.map((page) => page.id),
     );
-    const staleBefore = new Date(Date.now() - PROFILE_IMAGE_CACHE_TTL_MS);
     const profileImageUrlMap = new Map<string, string | null>();
-    const pagesToRefresh = pages.filter((page) => {
+
+    for (const page of pages) {
       const cached = cachedMap.get(page.id);
 
-      if (cached && cached.lastSyncedAt >= staleBefore) {
+      if (cached) {
         profileImageUrlMap.set(page.id, cached.imageUrl);
-        return false;
+      } else {
+        profileImageUrlMap.set(page.id, null);
       }
-
-      return true;
-    });
-
-    if (pagesToRefresh.length === 0) {
-      return profileImageUrlMap;
-    }
-
-    const refreshedRecords = await this.fetchCrewProfileImageCacheRecords(pagesToRefresh);
-    await this.crewProfileImageCacheRepository.upsertMany(refreshedRecords);
-
-    for (const record of refreshedRecords) {
-      profileImageUrlMap.set(record.notionPageId, record.imageUrl);
     }
 
     return profileImageUrlMap;
@@ -746,14 +738,39 @@ export class TeamRealRepository implements TeamRepository {
   private async fetchCrewProfileImageCacheRecords(
     pages: Array<Pick<PageObjectResponse, 'id'>>,
   ): Promise<CrewProfileImageCacheRecord[]> {
+    if (!this.profileImageFileStorage) {
+      throw new Error('PROFILE_IMAGE_STORAGE_DIR must be configured for profile image sync');
+    }
+
     const lastSyncedAt = new Date();
     const records: CrewProfileImageCacheRecord[] = [];
 
     for (const page of pages) {
-      const imageUrl = await this.crewFetcher.fetchProfileImageUrl(page.id);
+      const sourceImageUrl = await this.crewFetcher.fetchProfileImageUrl(page.id);
+
+      if (!sourceImageUrl) {
+        records.push({
+          notionPageId: page.id,
+          imageUrl: null,
+          sourceImageUrl: null,
+          localPath: null,
+          contentType: null,
+          contentHash: null,
+          fileSize: null,
+          lastSyncedAt,
+        });
+        continue;
+      }
+
+      const storedImage = await this.profileImageFileStorage.saveFromUrl(page.id, sourceImageUrl);
       records.push({
         notionPageId: page.id,
-        imageUrl,
+        imageUrl: storedImage.publicUrl,
+        sourceImageUrl,
+        localPath: storedImage.localPath,
+        contentType: storedImage.contentType,
+        contentHash: storedImage.contentHash,
+        fileSize: storedImage.fileSize,
         lastSyncedAt,
       });
     }

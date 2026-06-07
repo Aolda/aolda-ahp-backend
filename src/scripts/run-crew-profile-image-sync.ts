@@ -1,5 +1,6 @@
 import { readAppEnv } from '../common/config/env';
 import { CrewProfileImageCacheRepository } from '../modules/team/datasources/crew-profile-image-cache.repository';
+import { ProfileImageFileStorage } from '../modules/team/datasources/profile-image-file-storage';
 import { TeamRealRepository } from '../modules/team/datasources/team-real.repository';
 import { createNotionClient } from '../util/notion/client';
 import { getPrismaClient } from '../util/prisma';
@@ -24,6 +25,10 @@ async function main(): Promise<void> {
     notionClient: createNotionClient(env.notion.apiKey),
     notionTeamDbIds: env.notion.teamDbIds,
     crewProfileImageCacheRepository: new CrewProfileImageCacheRepository(prisma),
+    profileImageFileStorage: new ProfileImageFileStorage(
+      env.profileImage.storageDir,
+      env.profileImage.publicBaseUrl,
+    ),
   });
 
   const syncedCount = await teamRealRepository.syncCrewProfileImageCache();
