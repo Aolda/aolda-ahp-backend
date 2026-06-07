@@ -8,6 +8,9 @@ export const ALLOWED_ENV_KEYS = [
   'CORS_ALLOW_CREDENTIALS',
   'NOTION_API_KEY',
   'NOTION_TEAM_DB_IDS',
+  'PROFILE_IMAGE_STORAGE_DIR',
+  'PROFILE_IMAGE_PUBLIC_BASE_URL',
+  'CREW_PROFILE_IMAGE_SYNC_ON_START',
 ] as const;
 
 const DEFAULT_CORS_ALLOW_ORIGINS = [
@@ -58,6 +61,11 @@ export interface AppEnv {
   nodeEnv: string;
   useMockData: boolean;
   databaseUrl?: string;
+  profileImage: {
+    storageDir: string;
+    publicBaseUrl: string;
+    syncOnStart: boolean;
+  };
   cors: {
     origins: string[];
     methods: string[];
@@ -84,6 +92,11 @@ export function readAppEnv(): AppEnv {
     nodeEnv: process.env.NODE_ENV ?? 'development',
     useMockData: parseBoolEnv(process.env.USE_MOCK_DATA, true),
     databaseUrl: process.env.DATABASE_URL,
+    profileImage: {
+      storageDir: process.env.PROFILE_IMAGE_STORAGE_DIR ?? '/app/storage/profile-images',
+      publicBaseUrl: process.env.PROFILE_IMAGE_PUBLIC_BASE_URL ?? '/assets/profile-images',
+      syncOnStart: parseBoolEnv(process.env.CREW_PROFILE_IMAGE_SYNC_ON_START, false),
+    },
     cors: {
       origins: parseCsvEnv(process.env.CORS_ALLOW_ORIGINS, DEFAULT_CORS_ALLOW_ORIGINS),
       methods: parseCsvEnv(process.env.CORS_ALLOW_METHODS, ['*']),

@@ -2,6 +2,9 @@ import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
+import { createReadStream } from 'fs';
+import { stat } from 'fs/promises';
+import { join } from 'path';
 
 import { ALLOWED_ENV_KEYS, AppEnv, readAppEnv } from './common/config/env';
 import { CloudMockRepository } from './modules/cloud/datasources/cloud-mock.repository';
@@ -12,6 +15,7 @@ import { InternalExamplePrismaRepository } from './modules/internal-example/data
 import { registerInternalExampleRoutes } from './modules/internal-example/routes/internal-example.route';
 import { InternalExampleService } from './modules/internal-example/services/internal-example.service';
 import { CrewProfileImageCacheRepository } from './modules/team/datasources/crew-profile-image-cache.repository';
+import { ProfileImageFileStorage } from './modules/team/datasources/profile-image-file-storage';
 import { TeamActivityMetadataRepository } from './modules/team/datasources/team-activity-metadata.repository';
 import { TeamMockRepository } from './modules/team/datasources/team-mock.repository';
 import { TeamRealRepository } from './modules/team/datasources/team-real.repository';
@@ -27,6 +31,15 @@ import { registerTeamRoutes } from './routes/team';
 const PROJECT_NAME = 'aolda-ahp-backend';
 const VERSION = '0.1.0';
 const DEFAULT_PORT = 8001;
+const PROFILE_IMAGE_CONTENT_TYPES: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.avif': 'image/avif',
+  '.svg': 'image/svg+xml',
+};
 
 function createTeamQueryService(
   env: AppEnv,
@@ -46,6 +59,10 @@ function createTeamQueryService(
       crewProfileImageCacheRepository: env.databaseUrl
         ? new CrewProfileImageCacheRepository(getPrismaClient())
         : undefined,
+      profileImageFileStorage: new ProfileImageFileStorage(
+        env.profileImage.storageDir,
+        env.profileImage.publicBaseUrl,
+      ),
       teamActivityMetadataRepository: env.databaseUrl
         ? new TeamActivityMetadataRepository(getPrismaClient())
         : undefined,
@@ -70,6 +87,38 @@ function createInternalExampleService(useMockData: boolean): InternalExampleServ
     : new InternalExamplePrismaRepository();
 
   return new InternalExampleService(repository);
+}
+
+function registerProfileImageStaticRoute(app: FastifyInstance, env: AppEnv): void {
+  const publicBasePath = env.profileImage.publicBaseUrl.replace(/\/$/, '');
+
+  if (!publicBasePath.startsWith('/')) {
+    app.log.warn(
+      { PROFILE_IMAGE_PUBLIC_BASE_URL: env.profileImage.publicBaseUrl },
+      'Profile image public base URL is not a relative path; static serving is disabled',
+    );
+    return;
+  }
+
+  app.get(`${publicBasePath}/:fileName`, async (request, reply) => {
+    const { fileName } = request.params as { fileName: string };
+
+    if (!/^[a-zA-Z0-9._-]+$/.test(fileName)) {
+      return reply.code(400).send({ message: 'Invalid profile image file name' });
+    }
+
+    const filePath = join(env.profileImage.storageDir, fileName);
+    const fileStat = await stat(filePath).catch(() => null);
+
+    if (!fileStat?.isFile()) {
+      return reply.code(404).send({ message: 'Profile image not found' });
+    }
+
+    const extension = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
+    reply.header('cache-control', 'public, max-age=300');
+    reply.type(PROFILE_IMAGE_CONTENT_TYPES[extension] ?? 'application/octet-stream');
+    return reply.send(createReadStream(filePath));
+  });
 }
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -112,6 +161,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerHealthRoutes(app);
   await registerTeamRoutes(app, { teamQueryService });
   await registerCloudRoutes(app, { cloudQueryService });
+  registerProfileImageStaticRoute(app, env);
 
   if (env.nodeEnv === 'development') {
     await registerInternalExampleRoutes(app, { internalExampleService });
@@ -151,7 +201,9 @@ export async function buildApp(): Promise<FastifyInstance> {
       'Applied env values',
     );
 
-    crewProfileImageSyncJob?.start();
+    if (env.profileImage.syncOnStart) {
+      crewProfileImageSyncJob?.start();
+    }
   });
 
   app.addHook('onClose', async () => {
