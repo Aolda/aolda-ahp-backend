@@ -326,13 +326,48 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     async function showCrew(id) {
       const crew = (await api('/admin/crews/' + id)).data;
+      if (state.projects.length === 0) await loadProjects();
+      if (state.blogs.length === 0) await loadBlogs();
+      const termTeams = crew.termTeamOverrides.length > 0 ? crew.termTeamOverrides : crew.termTeamSources;
+      const visibleProjectIds = new Set(crew.projectVisibilities.filter((item) => item.isVisible).map((item) => item.projectSourceId));
+      const visibleBlogIds = new Set(crew.blogVisibilities.filter((item) => item.isVisible).map((item) => item.blogPostSourceId));
       $('crewDetail').innerHTML = '<h2>' + esc(crew.name) + '</h2>'
         + '<label><input id="crewVisible" type="checkbox" ' + (crew.adminProfile?.isVisible ? 'checked' : '') + '> Visible</label>'
         + '<label>Description</label><textarea id="crewDescription" placeholder="' + esc(crew.notionDescription || '') + '">' + esc(crew.adminProfile?.description || '') + '</textarea>'
-        + '<div class="toolbar"><button id="saveCrew">Save</button></div>';
+        + '<div class="toolbar"><button id="saveCrew">Save profile</button></div>'
+        + '<h2>Term teams</h2><div id="crewTermTeams">' + termTeams.map(termTeamRowHtml).join('') + '</div>'
+        + '<div class="toolbar"><button id="addCrewTerm">Add term</button><button id="saveCrewTerms">Save terms</button></div>'
+        + '<h2>Projects</h2><div id="crewProjects">' + checkboxListHtml('crewProject', state.projects, visibleProjectIds, (item) => item.titleKo) + '</div>'
+        + '<div class="toolbar"><button id="saveCrewProjects">Save projects</button></div>'
+        + '<h2>Blogs</h2><div id="crewBlogs">' + checkboxListHtml('crewBlog', state.blogs, visibleBlogIds, (item) => item.title) + '</div>'
+        + '<div class="toolbar"><button id="saveCrewBlogs">Save blogs</button></div>';
       $('saveCrew').onclick = async () => {
         await api('/admin/crews/' + id, { method: 'PATCH', body: JSON.stringify({ isVisible: $('crewVisible').checked, description: $('crewDescription').value }) });
         await loadCrews();
+      };
+      $('addCrewTerm').onclick = () => {
+        $('crewTermTeams').insertAdjacentHTML('beforeend', termTeamRowHtml({ generation: '', activityTerm: '', teamName: '' }));
+      };
+      $('saveCrewTerms').onclick = async () => {
+        await api('/admin/crews/' + id + '/term-teams', {
+          method: 'PUT',
+          body: JSON.stringify({ items: collectCrewTermTeams() }),
+        });
+        await showCrew(id);
+      };
+      $('saveCrewProjects').onclick = async () => {
+        await api('/admin/crews/' + id + '/projects', {
+          method: 'PUT',
+          body: JSON.stringify({ projects: collectCheckedItems('crewProject', 'projectSourceId') }),
+        });
+        await showCrew(id);
+      };
+      $('saveCrewBlogs').onclick = async () => {
+        await api('/admin/crews/' + id + '/blogs', {
+          method: 'PUT',
+          body: JSON.stringify({ blogs: collectCheckedItems('crewBlog', 'blogPostSourceId') }),
+        });
+        await showCrew(id);
       };
     }
     async function loadProjects() {
@@ -346,13 +381,24 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     async function showProject(id) {
       const project = (await api('/admin/projects/' + id)).data;
+      if (state.crews.length === 0) await loadCrews();
+      if (state.blogs.length === 0) await loadBlogs();
+      const participantIds = new Set(project.participantOverrides.filter((item) => item.isVisible).map((item) => item.crewSourceId));
+      const featuredBlogIds = new Set(project.featuredBlogs.map((item) => item.blogPostSourceId));
+      const periods = project.periodOverrides.length > 0 ? project.periodOverrides : [{ label: '', startedAt: project.startedAt || '', endedAt: project.endedAt || '' }];
       $('projectDetail').innerHTML = '<h2>' + esc(project.titleKo) + '</h2>'
         + '<label><input id="projectVisible" type="checkbox" ' + (project.adminProfile?.isVisible ? 'checked' : '') + '> Visible</label>'
         + '<label>Korean title</label><input id="projectKo" placeholder="' + esc(project.titleKo || '') + '" value="' + esc(project.adminProfile?.titleKoOverride || '') + '">'
         + '<label>English title</label><input id="projectEn" placeholder="' + esc(project.titleEn || '') + '" value="' + esc(project.adminProfile?.titleEnOverride || '') + '">'
         + '<label>Brief title</label><input id="projectBrief" placeholder="' + esc(project.titleBrief || '') + '" value="' + esc(project.adminProfile?.titleBriefOverride || '') + '">'
         + '<label>Description</label><textarea id="projectDescription">' + esc(project.adminProfile?.description || '') + '</textarea>'
-        + '<div class="toolbar"><button id="saveProject">Save</button></div>';
+        + '<div class="toolbar"><button id="saveProject">Save profile</button></div>'
+        + '<h2>Periods</h2><div id="projectPeriods">' + periods.map(periodRowHtml).join('') + '</div>'
+        + '<div class="toolbar"><button id="addProjectPeriod">Add period</button><button id="saveProjectPeriods">Save periods</button></div>'
+        + '<h2>Participants</h2><div id="projectParticipants">' + checkboxListHtml('projectParticipant', state.crews, participantIds, (item) => item.name) + '</div>'
+        + '<div class="toolbar"><button id="saveProjectParticipants">Save participants</button></div>'
+        + '<h2>Featured blogs</h2><div id="projectBlogs">' + checkboxListHtml('projectBlog', state.blogs, featuredBlogIds, (item) => item.title) + '</div>'
+        + '<div class="toolbar"><button id="saveProjectBlogs">Save featured blogs</button></div>';
       $('saveProject').onclick = async () => {
         await api('/admin/projects/' + id, { method: 'PATCH', body: JSON.stringify({
           isVisible: $('projectVisible').checked,
@@ -362,6 +408,30 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           description: $('projectDescription').value
         }) });
         await loadProjects();
+      };
+      $('addProjectPeriod').onclick = () => {
+        $('projectPeriods').insertAdjacentHTML('beforeend', periodRowHtml({ label: '', startedAt: '', endedAt: '' }));
+      };
+      $('saveProjectPeriods').onclick = async () => {
+        await api('/admin/projects/' + id + '/periods', {
+          method: 'PUT',
+          body: JSON.stringify({ periods: collectProjectPeriods() }),
+        });
+        await showProject(id);
+      };
+      $('saveProjectParticipants').onclick = async () => {
+        await api('/admin/projects/' + id + '/participants', {
+          method: 'PUT',
+          body: JSON.stringify({ participants: collectCheckedItems('projectParticipant', 'crewSourceId') }),
+        });
+        await showProject(id);
+      };
+      $('saveProjectBlogs').onclick = async () => {
+        await api('/admin/projects/' + id + '/featured-blogs', {
+          method: 'PUT',
+          body: JSON.stringify({ blogs: collectCheckedItems('projectBlog', 'blogPostSourceId').map(({ blogPostSourceId }, index) => ({ blogPostSourceId, sortOrder: index })) }),
+        });
+        await showProject(id);
       };
     }
     async function loadBlogs() {
@@ -374,6 +444,48 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     function rowHtml(id, title, meta) {
       return '<div class="row"><div><div class="title">' + esc(title || '') + '</div><div class="meta">' + esc(meta || '') + '</div></div><button data-id="' + esc(id) + '">Open</button></div>';
+    }
+    function checkboxListHtml(name, items, selectedIds, labeler) {
+      if (!items.length) return '<div class="meta">No rows</div>';
+      return items.map((item, index) =>
+        '<label class="inline"><input type="checkbox" name="' + esc(name) + '" data-id="' + esc(item.id) + '" data-order="' + index + '" ' + (selectedIds.has(item.id) ? 'checked' : '') + '> ' + esc(labeler(item) || item.id) + '</label>'
+      ).join('');
+    }
+    function termTeamRowHtml(item) {
+      return '<div class="toolbar term-row">'
+        + '<input data-field="generation" inputmode="numeric" placeholder="Generation" value="' + esc(item.generation ?? '') + '">'
+        + '<input data-field="activityTerm" placeholder="Activity term" value="' + esc(item.activityTerm || '') + '">'
+        + '<input data-field="teamName" placeholder="Team" value="' + esc(item.teamName || '') + '">'
+        + '</div>';
+    }
+    function periodRowHtml(item) {
+      return '<div class="toolbar period-row">'
+        + '<input data-field="label" placeholder="Label" value="' + esc(item.label || '') + '">'
+        + '<input data-field="startedAt" placeholder="Started at" value="' + esc(item.startedAt || '') + '">'
+        + '<input data-field="endedAt" placeholder="Ended at" value="' + esc(item.endedAt || '') + '">'
+        + '</div>';
+    }
+    function collectCrewTermTeams() {
+      return Array.from(document.querySelectorAll('.term-row')).map((row) => ({
+        generation: Number(row.querySelector('[data-field="generation"]').value),
+        activityTerm: row.querySelector('[data-field="activityTerm"]').value.trim(),
+        teamName: row.querySelector('[data-field="teamName"]').value.trim(),
+      })).filter((item) => Number.isInteger(item.generation) && item.activityTerm && item.teamName);
+    }
+    function collectProjectPeriods() {
+      return Array.from(document.querySelectorAll('.period-row')).map((row, index) => ({
+        label: emptyToNull(row.querySelector('[data-field="label"]').value),
+        startedAt: row.querySelector('[data-field="startedAt"]').value.trim(),
+        endedAt: emptyToNull(row.querySelector('[data-field="endedAt"]').value),
+        sortOrder: index,
+      })).filter((item) => item.startedAt);
+    }
+    function collectCheckedItems(name, idField) {
+      return Array.from(document.querySelectorAll('input[name="' + name + '"]')).map((input, index) => ({
+        [idField]: input.dataset.id,
+        isVisible: input.checked,
+        sortOrder: index,
+      }));
     }
     function esc(value) {
       return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
