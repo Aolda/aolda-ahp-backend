@@ -11,7 +11,7 @@ export interface CrewLogItem {
 }
 
 export interface CrewListItem {
-  crewId: number;
+  crewId: number | string;
   profile: { url: string };
   crewName: string;
   crewLog: CrewLogItem[];
@@ -39,7 +39,7 @@ export interface ActivityNameSet {
 }
 
 export interface ActivityListItem {
-  activityId: number;
+  activityId: number | string;
   status: string;
   startedAt: string;
   activityNames: ActivityNameSet;
@@ -57,7 +57,7 @@ export interface ActivityListResponse {
 }
 
 export interface ProjectListItem {
-  activityId: number;
+  activityId: number | string;
   status: string;
   startedAt: string;
   endedAt: string | null;
@@ -104,7 +104,7 @@ export interface UpdateActivityMetadataInput {
 }
 
 export interface ActivityMetadataResponse {
-  activityId: number;
+  activityId: number | string;
   activityNames: ActivityNameSet;
   description: string | null;
   isVisible: boolean;
@@ -124,7 +124,7 @@ export interface CrewDetailResponse extends Omit<CrewListItem, 'totalActivities'
   crewEmail: string;
   description: string;
   activities: Array<{
-    activityId: number;
+    activityId: number | string;
     status: string;
     startedAt: string;
     activityNames: ActivityNameSet;

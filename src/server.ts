@@ -24,6 +24,7 @@ import { InternalExampleService } from './modules/internal-example/services/inte
 import { CrewProfileImageCacheRepository } from './modules/team/datasources/crew-profile-image-cache.repository';
 import { ProfileImageFileStorage } from './modules/team/datasources/profile-image-file-storage';
 import { TeamActivityMetadataRepository } from './modules/team/datasources/team-activity-metadata.repository';
+import { TeamContentRepository } from './modules/team/datasources/team-content.repository';
 import { TeamMockRepository } from './modules/team/datasources/team-mock.repository';
 import { TeamRealRepository } from './modules/team/datasources/team-real.repository';
 import { CrewProfileImageSyncJob } from './modules/team/jobs/crew-profile-image-sync.job';
@@ -57,6 +58,8 @@ function createTeamQueryService(
 
   if (env.useMockData) {
     repository = new TeamMockRepository();
+  } else if (env.databaseUrl) {
+    repository = new TeamContentRepository(getPrismaClient());
   } else {
     if (!env.notion.apiKey) {
       throw new Error('NOTION_API_KEY must be set when USE_MOCK_DATA=false');
