@@ -33,6 +33,7 @@ import { TeamQueryService } from './modules/team/services/team-query.service';
 import { createNotionClient } from './util/notion/client';
 import { getPrismaClient } from './util/prisma';
 import { registerAdminRoutes } from './routes/admin';
+import { registerAdminDashboardRoute } from './routes/admin-dashboard';
 import { registerCloudRoutes } from './routes/cloud';
 import { registerHealthRoutes } from './routes/health';
 import { registerTeamRoutes } from './routes/team';
@@ -198,6 +199,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   }
 
   await registerHealthRoutes(app);
+  await registerAdminDashboardRoute(app);
   await registerAdminRoutes(app, {
     adminAuthService,
     adminContentService,
