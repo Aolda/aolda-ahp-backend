@@ -302,6 +302,103 @@ npm run team:profile-image:sync
 
 `USE_MOCK_DATA=false` 이고 `DATABASE_URL`이 설정되어 있으면, 서버는 시작 후 즉시 한 번 동기화하고 이후 12시간마다 프로필 이미지 URL 캐시를 갱신합니다.
 
+## 7-1) 관리자 콘솔 / 공개 API 제어
+
+관리자 콘솔은 Notion 수집값과 관리자 설정값을 분리해서 관리합니다.
+
+```text
+Notion -> admin content sync -> *Source 테이블
+관리자 콘솔 -> *AdminProfile / Visibility / Override 테이블
+공개 API -> DB read model -> response
+```
+
+### 접속
+
+```text
+http://localhost:8001/admin
+```
+
+초기 관리자 계정은 DB에 관리자 계정이 하나도 없을 때 자동 생성됩니다.
+
+```text
+email: admin
+password: admin
+```
+
+운영에서는 첫 로그인 이후 반드시 비밀번호 변경 기능을 추가하거나, `ADMIN_DEFAULT_EMAIL` / `ADMIN_DEFAULT_PASSWORD`를 별도 값으로 설정하세요.
+
+### 추가 환경변수
+
+- `ADMIN_DEFAULT_EMAIL`
+  - 기본값: `admin`
+- `ADMIN_DEFAULT_PASSWORD`
+  - 기본값: `admin`
+- `ADMIN_SESSION_SECRET`
+  - 관리자 Bearer token HMAC 서명용 secret
+- `NOTION_TEAM_DB_IDS`
+  - 기존 키에 더해 `blog:<id>`를 추가할 수 있습니다.
+  - 예: `crew:<id>,activity:<id>,project:<id>,blog:<id>`
+
+### 수동 Notion 콘텐츠 동기화
+
+CLI:
+
+```bash
+npm run admin:content:sync
+```
+
+Admin API:
+
+```text
+POST /admin/sync/notion
+Authorization: Bearer <admin token>
+```
+
+동기화 대상:
+
+- `CrewSource`, `CrewTermTeamSource`
+- `ProjectSource`
+- `BlogPostSource`
+
+새로 수집된 크루/프로젝트/블로그는 기본 비공개입니다.
+
+### 관리자 API 요약
+
+```text
+POST /admin/login
+GET  /admin/me
+
+GET   /admin/crews
+GET   /admin/crews/:id
+PATCH /admin/crews/:id
+PUT   /admin/crews/:id/term-teams
+PUT   /admin/crews/:id/projects
+PUT   /admin/crews/:id/blogs
+
+GET   /admin/projects
+GET   /admin/projects/:id
+PATCH /admin/projects/:id
+PUT   /admin/projects/:id/periods
+PUT   /admin/projects/:id/participants
+PUT   /admin/projects/:id/featured-blogs
+
+GET   /admin/blogs
+POST  /admin/sync/notion
+```
+
+`PUT /admin/crews/:id/term-teams`는 관리자 설정값을 DB에 저장한 뒤, Notion crew datasource에서 `작성기수`와 `계정(프로필)` people id가 일치하는 페이지를 찾아 `팀` select를 수정합니다.
+
+### 배포 순서
+
+1. `npm run prisma:generate`
+2. `npm run prisma:migrate:deploy`
+3. 서버 기동
+4. `/admin` 로그인
+5. `POST /admin/sync/notion` 또는 `npm run admin:content:sync`
+6. 관리자 콘솔에서 공개 여부와 override 값을 저장
+
+운영 manifest에는 backend presync migration Job이 있으므로, 새 migration이 먼저 적용된 뒤 서버가 올라오는 흐름을 유지하세요.
+
 ## 8) 신규 API/로직 추가 방법
 
 1. `repositories`에서 인터페이스를 정의합니다.
