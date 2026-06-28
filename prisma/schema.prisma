@@ -53,6 +53,7 @@ model AdminUser {
 
 model CrewSource {
   id                  String   @id @default(uuid())
+  sourceKey           String   @unique
   primaryNotionPageId String?  @unique
   profileAccountIds   Json?
   name                String

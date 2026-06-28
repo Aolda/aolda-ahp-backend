@@ -16,7 +16,8 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
-    "team:profile-image:sync": "tsx src/scripts/run-crew-profile-image-sync.ts"
+    "team:profile-image:sync": "tsx src/scripts/run-crew-profile-image-sync.ts",
+    "admin:content:sync": "tsx src/scripts/run-notion-content-sync.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
