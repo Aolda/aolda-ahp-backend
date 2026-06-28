@@ -17,7 +17,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "team:profile-image:sync": "tsx src/scripts/run-crew-profile-image-sync.ts",
-    "admin:content:sync": "tsx src/scripts/run-notion-content-sync.ts"
+    "admin:content:sync": "tsx src/scripts/run-notion-content-sync.ts",
+    "admin:auth:smoke": "tsx src/scripts/run-admin-auth-smoke.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",

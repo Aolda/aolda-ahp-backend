@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
-import { AdminUserRepository, type AdminUserRecord } from '../datasources/admin-user.repository';
+import { type AdminUserReader, type AdminUserRecord } from '../datasources/admin-user.repository';
 import { verifyPassword } from './password-hash.service';
 
 const TOKEN_TTL_SECONDS = 60 * 60 * 12;
@@ -20,7 +20,7 @@ export interface AdminSessionUser {
 
 export class AdminAuthService {
   constructor(
-    private readonly adminUserRepository: AdminUserRepository,
+    private readonly adminUserRepository: AdminUserReader,
     private readonly sessionSecret: string,
   ) {}
 

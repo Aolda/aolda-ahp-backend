@@ -16,7 +16,13 @@ export interface AdminUserRecord {
   updatedAt: Date;
 }
 
-export class AdminUserRepository {
+export interface AdminUserReader {
+  findByEmail(email: string): Promise<AdminUserRecord | null>;
+  findById(id: string): Promise<AdminUserRecord | null>;
+  markLoginSucceeded(id: string): Promise<void>;
+}
+
+export class AdminUserRepository implements AdminUserReader {
   constructor(private readonly prisma: PrismaClient) {}
 
   async ensureDefaultAdminUser(input: DefaultAdminUserInput): Promise<boolean> {
