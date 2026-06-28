@@ -13,11 +13,13 @@ import {
   type UpdateProjectPeriodInput,
 } from '../modules/admin/services/admin-content.service';
 import { NotionContentSyncService } from '../modules/admin/services/notion-content-sync.service';
+import { NotionCrewTeamWriteService } from '../modules/admin/services/notion-crew-team-write.service';
 
 interface AdminRouteDeps {
   adminAuthService?: AdminAuthService;
   adminContentService?: AdminContentService;
   notionContentSyncService?: NotionContentSyncService;
+  notionCrewTeamWriteService?: NotionCrewTeamWriteService;
 }
 
 interface AdminLoginBody {
@@ -123,10 +125,26 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
     async (
       request: FastifyRequest<{ Params: IdParams; Body: { items?: UpdateCrewTermTeamInput[] } }>,
       reply,
-    ) =>
-      safeAdminWrite(reply, () =>
-        deps.adminContentService!.replaceCrewTermTeams(request.params.id, request.body.items ?? []),
-      ),
+    ) => {
+      const items = request.body.items ?? [];
+      return safeAdminWrite(reply, async () => {
+        const overrides = await deps.adminContentService!.replaceCrewTermTeams(request.params.id, items);
+        if (!deps.notionCrewTeamWriteService) {
+          return {
+            overrides,
+            notionWriteResults: [],
+            warning: 'Notion crew team write-back is not configured',
+          };
+        }
+
+        const notionWriteResults = await deps.notionCrewTeamWriteService.writeCrewTermTeams(
+          request.params.id,
+          items,
+        );
+
+        return { overrides, notionWriteResults };
+      });
+    },
   );
 
   app.put(

@@ -13,6 +13,7 @@ import { AdminAuthService } from './modules/admin/services/admin-auth.service';
 import { AdminBootstrapService } from './modules/admin/services/admin-bootstrap.service';
 import { AdminContentService } from './modules/admin/services/admin-content.service';
 import { NotionContentSyncService } from './modules/admin/services/notion-content-sync.service';
+import { NotionCrewTeamWriteService } from './modules/admin/services/notion-crew-team-write.service';
 import { CloudMockRepository } from './modules/cloud/datasources/cloud-mock.repository';
 import { CloudPrismaRepository } from './modules/cloud/datasources/cloud-prisma.repository';
 import { CloudQueryService } from './modules/cloud/services/cloud-query.service';
@@ -180,13 +181,26 @@ export async function buildApp(): Promise<FastifyInstance> {
           new ContentSourceRepository(getPrismaClient()),
         )
       : undefined;
+  const notionCrewTeamWriteService =
+    env.databaseUrl && env.notion.apiKey && env.notion.teamDbIds.crew
+      ? new NotionCrewTeamWriteService(
+          createNotionClient(env.notion.apiKey),
+          env.notion.teamDbIds.crew,
+          getPrismaClient(),
+        )
+      : undefined;
 
   if (teamRealRepository && env.databaseUrl) {
     crewProfileImageSyncJob = new CrewProfileImageSyncJob(teamRealRepository, app.log);
   }
 
   await registerHealthRoutes(app);
-  await registerAdminRoutes(app, { adminAuthService, adminContentService, notionContentSyncService });
+  await registerAdminRoutes(app, {
+    adminAuthService,
+    adminContentService,
+    notionContentSyncService,
+    notionCrewTeamWriteService,
+  });
   await registerTeamRoutes(app, { teamQueryService });
   await registerCloudRoutes(app, { cloudQueryService });
   registerProfileImageStaticRoute(app, env);
