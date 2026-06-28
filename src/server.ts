@@ -11,6 +11,7 @@ import { ContentSourceRepository } from './modules/admin/datasources/content-sou
 import { AdminUserRepository } from './modules/admin/datasources/admin-user.repository';
 import { AdminAuthService } from './modules/admin/services/admin-auth.service';
 import { AdminBootstrapService } from './modules/admin/services/admin-bootstrap.service';
+import { AdminContentService } from './modules/admin/services/admin-content.service';
 import { NotionContentSyncService } from './modules/admin/services/notion-content-sync.service';
 import { CloudMockRepository } from './modules/cloud/datasources/cloud-mock.repository';
 import { CloudPrismaRepository } from './modules/cloud/datasources/cloud-prisma.repository';
@@ -168,6 +169,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   const adminAuthService = adminUserRepository
     ? new AdminAuthService(adminUserRepository, env.admin.sessionSecret)
     : undefined;
+  const adminContentService = env.databaseUrl
+    ? new AdminContentService(getPrismaClient())
+    : undefined;
   const notionContentSyncService =
     env.databaseUrl && env.notion.apiKey
       ? new NotionContentSyncService(
@@ -182,7 +186,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   }
 
   await registerHealthRoutes(app);
-  await registerAdminRoutes(app, { adminAuthService, notionContentSyncService });
+  await registerAdminRoutes(app, { adminAuthService, adminContentService, notionContentSyncService });
   await registerTeamRoutes(app, { teamQueryService });
   await registerCloudRoutes(app, { cloudQueryService });
   registerProfileImageStaticRoute(app, env);
