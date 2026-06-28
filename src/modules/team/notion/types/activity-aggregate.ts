@@ -6,6 +6,7 @@ export interface ActivityAggregate {
   activityId: number;
   status: ActivityListItem['status'];
   startedAt: string;
+  endedAt?: string | null;
   activityType: ActivityListItem['activityType'];
   participantsCount: number;
   activityNames: ActivityListItem['activityNames'];

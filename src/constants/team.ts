@@ -234,6 +234,7 @@ export const PROJECT_LIST_EXAMPLE = {
         activityId: 3,
         status: 'ACTIVITY_STATUS/RECRIUTING',
         startedAt: '2025-1',
+        endedAt: null,
         participantsCount: 22,
         activityNames: {
           ko: 'AI 학습 파이프라인 구축',
@@ -249,6 +250,7 @@ export const PROJECT_LIST_EXAMPLE = {
         activityId: 5,
         status: 'ACTIVITY_STATUS/ONBOARDING',
         startedAt: '2024-2',
+        endedAt: '2025-1',
         participantsCount: 18,
         activityNames: {
           ko: 'OpenInfra Summit',

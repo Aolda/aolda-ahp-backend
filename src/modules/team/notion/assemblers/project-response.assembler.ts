@@ -26,6 +26,7 @@ function buildProjectItem(activity: ActivityAggregate): ProjectItem {
     activityId: activity.activityId,
     status: activity.status,
     startedAt: activity.startedAt,
+    endedAt: activity.endedAt ?? null,
     participantsCount: activity.participantsCount,
     activityNames: activity.activityNames,
     background: activity.background,

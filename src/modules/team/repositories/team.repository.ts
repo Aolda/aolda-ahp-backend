@@ -60,6 +60,7 @@ export interface ProjectListItem {
   activityId: number;
   status: string;
   startedAt: string;
+  endedAt: string | null;
   participantsCount: number;
   activityNames: ActivityNameSet;
   background: {
