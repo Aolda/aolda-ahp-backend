@@ -5,6 +5,17 @@ export interface DefaultAdminUserInput {
   passwordHash: string;
 }
 
+export interface AdminUserRecord {
+  id: string;
+  email: string;
+  passwordHash: string;
+  role: string;
+  isActive: boolean;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export class AdminUserRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -36,5 +47,32 @@ export class AdminUserRepository {
     });
 
     return true;
+  }
+
+  async findByEmail(email: string): Promise<AdminUserRecord | null> {
+    return this.prisma.adminUser.findUnique({
+      where: {
+        email,
+      },
+    });
+  }
+
+  async findById(id: string): Promise<AdminUserRecord | null> {
+    return this.prisma.adminUser.findUnique({
+      where: {
+        id,
+      },
+    });
+  }
+
+  async markLoginSucceeded(id: string): Promise<void> {
+    await this.prisma.adminUser.update({
+      where: {
+        id,
+      },
+      data: {
+        lastLoginAt: new Date(),
+      },
+    });
   }
 }

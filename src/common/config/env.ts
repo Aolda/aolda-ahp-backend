@@ -10,6 +10,7 @@ export const ALLOWED_ENV_KEYS = [
   'NOTION_TEAM_DB_IDS',
   'ADMIN_DEFAULT_EMAIL',
   'ADMIN_DEFAULT_PASSWORD',
+  'ADMIN_SESSION_SECRET',
   'PROFILE_IMAGE_STORAGE_DIR',
   'PROFILE_IMAGE_PUBLIC_BASE_URL',
   'CREW_PROFILE_IMAGE_SYNC_ON_START',
@@ -89,6 +90,7 @@ export interface AppEnv {
   admin: {
     defaultEmail: string;
     defaultPassword: string;
+    sessionSecret: string;
   };
 }
 
@@ -125,6 +127,7 @@ export function readAppEnv(): AppEnv {
     admin: {
       defaultEmail: process.env.ADMIN_DEFAULT_EMAIL ?? 'admin',
       defaultPassword: process.env.ADMIN_DEFAULT_PASSWORD ?? 'admin',
+      sessionSecret: process.env.ADMIN_SESSION_SECRET ?? 'dev-admin-session-secret',
     },
   };
 }
