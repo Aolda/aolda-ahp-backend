@@ -8,6 +8,8 @@ export const ALLOWED_ENV_KEYS = [
   'CORS_ALLOW_CREDENTIALS',
   'NOTION_API_KEY',
   'NOTION_TEAM_DB_IDS',
+  'ADMIN_DEFAULT_EMAIL',
+  'ADMIN_DEFAULT_PASSWORD',
   'PROFILE_IMAGE_STORAGE_DIR',
   'PROFILE_IMAGE_PUBLIC_BASE_URL',
   'CREW_PROFILE_IMAGE_SYNC_ON_START',
@@ -81,7 +83,12 @@ export interface AppEnv {
       project?: string;
       crewRoleLookup?: string;
       crewProfile?: string;
+      blog?: string;
     };
+  };
+  admin: {
+    defaultEmail: string;
+    defaultPassword: string;
   };
 }
 
@@ -112,7 +119,12 @@ export function readAppEnv(): AppEnv {
         project: rawTeamDbIds['project'],
         crewRoleLookup: rawTeamDbIds['crew_role_lookup'],
         crewProfile: rawTeamDbIds['crew_profile'],
+        blog: rawTeamDbIds['blog'],
       },
+    },
+    admin: {
+      defaultEmail: process.env.ADMIN_DEFAULT_EMAIL ?? 'admin',
+      defaultPassword: process.env.ADMIN_DEFAULT_PASSWORD ?? 'admin',
     },
   };
 }

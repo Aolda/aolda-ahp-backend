@@ -7,6 +7,8 @@ import { stat } from 'fs/promises';
 import { join } from 'path';
 
 import { ALLOWED_ENV_KEYS, AppEnv, readAppEnv } from './common/config/env';
+import { AdminUserRepository } from './modules/admin/datasources/admin-user.repository';
+import { AdminBootstrapService } from './modules/admin/services/admin-bootstrap.service';
 import { CloudMockRepository } from './modules/cloud/datasources/cloud-mock.repository';
 import { CloudPrismaRepository } from './modules/cloud/datasources/cloud-prisma.repository';
 import { CloudQueryService } from './modules/cloud/services/cloud-query.service';
@@ -153,6 +155,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   const { teamQueryService, teamRealRepository } = createTeamQueryService(env);
   const cloudQueryService = createCloudQueryService(env.useMockData);
   const internalExampleService = createInternalExampleService(env.useMockData);
+  const adminBootstrapService = env.databaseUrl
+    ? new AdminBootstrapService(new AdminUserRepository(getPrismaClient()), app.log)
+    : undefined;
 
   if (teamRealRepository && env.databaseUrl) {
     crewProfileImageSyncJob = new CrewProfileImageSyncJob(teamRealRepository, app.log);
@@ -192,7 +197,9 @@ export async function buildApp(): Promise<FastifyInstance> {
           project: env.notion.teamDbIds.project ?? '<unset>',
           crewRoleLookup: env.notion.teamDbIds.crewRoleLookup ?? '<unset>',
           crewProfile: env.notion.teamDbIds.crewProfile ?? '<unset>',
+          blog: env.notion.teamDbIds.blog ?? '<unset>',
         },
+        ADMIN_DEFAULT_EMAIL: env.admin.defaultEmail,
         CORS_ALLOW_ORIGINS: env.cors.origins,
         CORS_ALLOW_METHODS: env.cors.methods,
         CORS_ALLOW_HEADERS: env.cors.headers,
@@ -200,6 +207,8 @@ export async function buildApp(): Promise<FastifyInstance> {
       },
       'Applied env values',
     );
+
+    await adminBootstrapService?.ensureDefaultAdmin(env.admin);
 
     if (env.profileImage.syncOnStart) {
       crewProfileImageSyncJob?.start();

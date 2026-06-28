@@ -27,15 +27,268 @@ model CrewProfileImageCache {
 }
 
 model TeamActivityMetadata {
-  id          Int      @id @default(autoincrement())
-  notionPageId String  @unique
-  sourceType  String
-  koName      String
-  enName      String?
-  briefName   String?
-  description String?  @db.Text
-  isVisible   Boolean  @default(true)
-  lastSeenAt  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           Int       @id @default(autoincrement())
+  notionPageId String    @unique
+  sourceType   String
+  koName       String
+  enName       String?
+  briefName    String?
+  description  String?   @db.Text
+  isVisible    Boolean   @default(true)
+  lastSeenAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  role         String    @default("ADMIN")
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model CrewSource {
+  id                  String   @id @default(uuid())
+  primaryNotionPageId String?  @unique
+  profileAccountIds   Json?
+  name                String
+  email               String?
+  profileImageUrl     String?
+  notionDescription   String?  @db.Text
+  joinedGen           Int?
+  sourcePayload       Json?
+  sourceArchived      Boolean  @default(false)
+  lastSyncedAt        DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  adminProfile         CrewAdminProfile?
+  termTeamSources      CrewTermTeamSource[]
+  termTeamOverrides    CrewTermTeamOverride[]
+  projectVisibilities  CrewProjectVisibility[]
+  blogVisibilities     CrewBlogVisibility[]
+  participantOverrides ProjectParticipantOverride[]
+}
+
+model CrewAdminProfile {
+  id           String   @id @default(uuid())
+  crewSourceId String   @unique
+  isVisible    Boolean  @default(false)
+  description  String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  crewSource CrewSource @relation(fields: [crewSourceId], references: [id], onDelete: Cascade)
+}
+
+model CrewTermTeamSource {
+  id                String   @id @default(uuid())
+  crewSourceId      String
+  notionPageId      String   @unique
+  generation        Int
+  activityTerm      String
+  teamName          String?
+  profileAccountIds Json?
+  sourcePayload     Json?
+  sourceArchived    Boolean  @default(false)
+  lastSyncedAt      DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  crewSource CrewSource @relation(fields: [crewSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([crewSourceId, generation])
+  @@index([activityTerm])
+}
+
+model CrewTermTeamOverride {
+  id                  String    @id @default(uuid())
+  crewSourceId        String
+  generation          Int
+  activityTerm        String
+  teamName            String
+  notionSyncedAt      DateTime?
+  notionWriteFailedAt DateTime?
+  notionWriteError    String?   @db.Text
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  crewSource CrewSource @relation(fields: [crewSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([crewSourceId, generation])
+  @@index([activityTerm])
+}
+
+model ProjectSource {
+  id                 String   @id @default(uuid())
+  notionPageId       String   @unique
+  titleKo            String
+  titleEn            String?
+  titleBrief         String?
+  status             String?
+  startedAt          String?
+  endedAt            String?
+  backgroundImageUrl String?
+  backgroundColor    String?
+  participantRefs    Json?
+  sourcePayload      Json?
+  sourceArchived     Boolean  @default(false)
+  lastSyncedAt       DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  adminProfile         ProjectAdminProfile?
+  crewVisibilities     CrewProjectVisibility[]
+  featuredBlogs        ProjectFeaturedBlog[]
+  periodOverrides      ProjectPeriodOverride[]
+  participantOverrides ProjectParticipantOverride[]
+}
+
+model ProjectAdminProfile {
+  id                 String   @id @default(uuid())
+  projectSourceId    String   @unique
+  isVisible          Boolean  @default(false)
+  titleKoOverride    String?
+  titleEnOverride    String?
+  titleBriefOverride String?
+  description        String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  projectSource ProjectSource @relation(fields: [projectSourceId], references: [id], onDelete: Cascade)
+}
+
+model BlogPostSource {
+  id              String    @id @default(uuid())
+  notionPageId    String    @unique
+  title           String
+  url             String?
+  projectName     String?
+  contentPreview  String?   @db.Text
+  recordedAt      DateTime?
+  participantRefs Json?
+  projectRefs     Json?
+  sourcePayload   Json?
+  sourceArchived  Boolean   @default(false)
+  lastSyncedAt    DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  crewVisibilities   CrewBlogVisibility[]
+  featuredInProjects ProjectFeaturedBlog[]
+}
+
+model CrewProjectVisibility {
+  id              String   @id @default(uuid())
+  crewSourceId    String
+  projectSourceId String
+  isVisible       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  crewSource    CrewSource    @relation(fields: [crewSourceId], references: [id], onDelete: Cascade)
+  projectSource ProjectSource @relation(fields: [projectSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([crewSourceId, projectSourceId])
+  @@index([projectSourceId])
+}
+
+model CrewBlogVisibility {
+  id               String   @id @default(uuid())
+  crewSourceId     String
+  blogPostSourceId String
+  isVisible        Boolean  @default(false)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  crewSource     CrewSource     @relation(fields: [crewSourceId], references: [id], onDelete: Cascade)
+  blogPostSource BlogPostSource @relation(fields: [blogPostSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([crewSourceId, blogPostSourceId])
+  @@index([blogPostSourceId])
+}
+
+model ProjectFeaturedBlog {
+  id               String   @id @default(uuid())
+  projectSourceId  String
+  blogPostSourceId String
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  projectSource  ProjectSource  @relation(fields: [projectSourceId], references: [id], onDelete: Cascade)
+  blogPostSource BlogPostSource @relation(fields: [blogPostSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([projectSourceId, blogPostSourceId])
+  @@index([blogPostSourceId])
+}
+
+model ProjectPeriodOverride {
+  id              String   @id @default(uuid())
+  projectSourceId String
+  label           String?
+  startedAt       String
+  endedAt         String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  projectSource ProjectSource @relation(fields: [projectSourceId], references: [id], onDelete: Cascade)
+
+  @@index([projectSourceId])
+}
+
+model ProjectParticipantOverride {
+  id              String   @id @default(uuid())
+  projectSourceId String
+  crewSourceId    String
+  isVisible       Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  projectSource ProjectSource @relation(fields: [projectSourceId], references: [id], onDelete: Cascade)
+  crewSource    CrewSource    @relation(fields: [crewSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([projectSourceId, crewSourceId])
+  @@index([crewSourceId])
+}
+
+model SyncJob {
+  id            String    @id @default(uuid())
+  source        String
+  status        String
+  requestedBy   String?
+  startedAt     DateTime  @default(now())
+  finishedAt    DateTime?
+  totalCount    Int       @default(0)
+  createdCount  Int       @default(0)
+  updatedCount  Int       @default(0)
+  archivedCount Int       @default(0)
+  errorMessage  String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  logs SyncLog[]
+
+  @@index([source, status])
+  @@index([startedAt])
+}
+
+model SyncLog {
+  id        String   @id @default(uuid())
+  syncJobId String
+  level     String
+  message   String   @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  syncJob SyncJob @relation(fields: [syncJobId], references: [id], onDelete: Cascade)
+
+  @@index([syncJobId])
 }
