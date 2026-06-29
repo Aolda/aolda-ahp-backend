@@ -241,10 +241,14 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       el.className = danger ? 'status danger' : 'status';
     }
     function authHeaders() {
-      return { authorization: 'Bearer ' + state.token, 'content-type': 'application/json' };
+      return { authorization: 'Bearer ' + state.token };
     }
     async function api(path, options = {}) {
-      const res = await fetch(path, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+      const headers = { ...authHeaders(), ...(options.headers || {}) };
+      if (options.body && !headers['content-type']) {
+        headers['content-type'] = 'application/json';
+      }
+      const res = await fetch(path, { ...options, headers });
       const text = await res.text();
       const data = text ? JSON.parse(text) : null;
       if (!res.ok) throw new Error(data?.message || res.statusText);
