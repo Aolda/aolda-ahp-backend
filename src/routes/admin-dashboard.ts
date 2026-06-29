@@ -608,7 +608,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       const project = (await api('/admin/projects/' + id)).data;
       if (state.crews.length === 0) await loadCrews();
       if (state.blogs.length === 0) await loadBlogs();
-      const participantIds = new Set(project.participantOverrides.filter((item) => item.isVisible).map((item) => item.crewSourceId));
+      const participantIds = resolveProjectParticipantIds(project, state.crews);
       const featuredBlogIds = new Set(project.featuredBlogs.map((item) => item.blogPostSourceId));
       const periods = project.periodOverrides.length > 0 ? project.periodOverrides : [{ label: '', startedAt: project.startedAt || '', endedAt: project.endedAt || '' }];
       $('projectDetail').innerHTML = '<h2>' + esc(project.titleKo) + '</h2>'
@@ -734,17 +734,35 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       }));
     }
     function isCrewProjectCandidate(project, crewId) {
-      return Array.isArray(project.participantOverrides)
-        && project.participantOverrides.some((item) => item.crewSourceId === crewId && item.isVisible);
+      if (Array.isArray(project.participantOverrides) && project.participantOverrides.length > 0) {
+        return project.participantOverrides.some((item) => item.crewSourceId === crewId && item.isVisible);
+      }
+
+      const crew = state.crews.find((item) => item.id === crewId);
+      return Boolean(crew && crewMatchesParticipantRefs(crew, project.participantRefs));
     }
     function crewMeta(crew) {
       const generations = [...new Set([...(crew.termTeamOverrides || []), ...(crew.termTeamSources || [])].map((item) => item.generation).filter(Boolean))].sort((a, b) => a - b);
       return generations.length ? generations.map((item) => item + '기').join(', ') : '기수 정보 없음';
     }
     function projectMeta(project) {
-      const count = (project.participantOverrides || []).filter((item) => item.isVisible).length;
+      const count = resolveProjectParticipantIds(project, state.crews).size;
       const period = project.endedAt ? project.startedAt + '~' + project.endedAt : project.startedAt;
       return [period || '기간 미지정', '참여자 ' + count + '명'].join(' · ');
+    }
+    function resolveProjectParticipantIds(project, crews) {
+      if (Array.isArray(project.participantOverrides) && project.participantOverrides.length > 0) {
+        return new Set(project.participantOverrides.filter((item) => item.isVisible).map((item) => item.crewSourceId));
+      }
+
+      return new Set(crews.filter((crew) => crewMatchesParticipantRefs(crew, project.participantRefs)).map((crew) => crew.id));
+    }
+    function crewMatchesParticipantRefs(crew, participantRefs) {
+      if (!Array.isArray(participantRefs) || !Array.isArray(crew.profileAccountIds)) {
+        return false;
+      }
+
+      return crew.profileAccountIds.some((accountId) => participantRefs.includes(accountId));
     }
     function visibilityBadge(isVisible) {
       return isVisible ? '<span class="badge public">공개</span>' : '<span class="badge private">비공개</span>';
