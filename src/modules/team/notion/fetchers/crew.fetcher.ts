@@ -23,7 +23,7 @@ export class CrewFetcher {
     return {
       page,
       profileImageUrl:
-        profileImageUrl === undefined ? await this.fetchProfileImageUrl(page.id) : profileImageUrl,
+        profileImageUrl === undefined ? await this.resolveProfileImageUrl(page) : profileImageUrl,
     };
   }
 
@@ -41,6 +41,27 @@ export class CrewFetcher {
 
   async fetchProfileImageUrl(pageId: string): Promise<string | null> {
     return this.findFirstImageUrl(pageId);
+  }
+
+  private async resolveProfileImageUrl(page: PageObjectResponse): Promise<string | null> {
+    return this.extractPageIconUrl(page) ?? this.fetchProfileImageUrl(page.id);
+  }
+
+  private extractPageIconUrl(page: PageObjectResponse): string | null {
+    const icon = page.icon;
+    if (!icon) {
+      return null;
+    }
+
+    if (icon.type === 'external') {
+      return icon.external.url;
+    }
+
+    if (icon.type === 'file') {
+      return icon.file.url;
+    }
+
+    return null;
   }
 
   private async fetchAllPages(): Promise<PageObjectResponse[]> {

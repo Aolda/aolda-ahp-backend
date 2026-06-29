@@ -42,6 +42,13 @@ export interface SyncEntitySummary {
   created: number;
   updated: number;
   skipped: number;
+  profileImages?: ProfileImageSyncSummary;
+}
+
+export interface ProfileImageSyncSummary {
+  found: number;
+  downloaded: number;
+  failed: number;
 }
 
 export class NotionContentSyncService {
@@ -78,22 +85,36 @@ export class NotionContentSyncService {
       this.fetchActivityTermGenerationMap(generationMappingFetcher),
     ]);
     const syncedAt = new Date();
+    const profileImages: ProfileImageSyncSummary = {
+      found: 0,
+      downloaded: 0,
+      failed: 0,
+    };
 
     for (const page of crewPages) {
       const profileAccountIds = extractProfileAccountIds(page);
       const generations = extractGenerationNumbers(page);
-      const detailSource = await crewFetcher.fetchDetailSource(page, null);
-      const profileImageUrl = await this.resolveProfileImageUrl(
+      const detailSource = await crewFetcher.fetchDetailSource(page);
+      const profileImage = await this.resolveProfileImageUrl(
         page.id,
         detailSource.profileImageUrl,
       );
+      if (detailSource.profileImageUrl) {
+        profileImages.found += 1;
+      }
+      if (profileImage.downloaded) {
+        profileImages.downloaded += 1;
+      }
+      if (profileImage.failed) {
+        profileImages.failed += 1;
+      }
       const result = await this.contentSourceRepository.upsertCrewSource({
         sourceKey: this.buildCrewSourceKey(page, profileAccountIds),
         primaryNotionPageId: page.id,
         profileAccountIds,
         name: extractCrewName(page),
         email: this.extractCrewEmailOrNull(page),
-        profileImageUrl,
+        profileImageUrl: profileImage.url,
         notionDescription: detailSource.description,
         joinedGen: generations[0] ?? null,
         sourcePayload: page as never,
@@ -123,15 +144,16 @@ export class NotionContentSyncService {
       }
     }
 
+    summary.profileImages = profileImages;
     return summary;
   }
 
   private async resolveProfileImageUrl(
     notionPageId: string,
     sourceImageUrl: string | null,
-  ): Promise<string | null> {
+  ): Promise<{ url: string | null; downloaded: boolean; failed: boolean }> {
     if (!sourceImageUrl || !this.profileImageFileStorage) {
-      return sourceImageUrl;
+      return { url: sourceImageUrl, downloaded: false, failed: false };
     }
 
     try {
@@ -139,9 +161,9 @@ export class NotionContentSyncService {
         notionPageId,
         sourceImageUrl,
       );
-      return storedImage.publicUrl;
+      return { url: storedImage.publicUrl, downloaded: true, failed: false };
     } catch {
-      return sourceImageUrl;
+      return { url: sourceImageUrl, downloaded: false, failed: true };
     }
   }
 
