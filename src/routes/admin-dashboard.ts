@@ -193,6 +193,9 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       padding: 14px 16px;
       border-bottom: 1px solid var(--border);
     }
+    .row.selectable {
+      grid-template-columns: 22px minmax(0, 1fr) auto;
+    }
     .row:last-child { border-bottom: 0; }
     .title { font-weight: 750; overflow-wrap: anywhere; }
     .meta {
@@ -358,7 +361,14 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
             <h2>크루 관리</h2>
             <div class="page-subtitle">공개 프로필, 기수별 팀, 프로젝트와 블로그 공개 여부를 관리합니다.</div>
           </div>
-          <button id="refreshCrews">새로고침</button>
+          <div class="toolbar">
+            <div id="crewBulkToolbar" class="toolbar hidden" style="margin:0">
+              <span id="crewBulkStatus" class="badge"></span>
+              <button id="bulkShowCrews">선택대상 일괄공개</button>
+              <button id="bulkHideCrews">선택대상 일괄비공개</button>
+            </div>
+            <button id="refreshCrews">새로고침</button>
+          </div>
         </div>
         <div class="grid">
           <div class="card">
@@ -378,7 +388,14 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
             <h2>프로젝트 관리</h2>
             <div class="page-subtitle">프로젝트 공개 정보, 진행기간, 참여자와 대표 블로그를 관리합니다.</div>
           </div>
-          <button id="refreshProjects">새로고침</button>
+          <div class="toolbar">
+            <div id="projectBulkToolbar" class="toolbar hidden" style="margin:0">
+              <span id="projectBulkStatus" class="badge"></span>
+              <button id="bulkShowProjects">선택대상 일괄공개</button>
+              <button id="bulkHideProjects">선택대상 일괄비공개</button>
+            </div>
+            <button id="refreshProjects">새로고침</button>
+          </div>
         </div>
         <div class="grid">
           <div class="card">
@@ -531,9 +548,10 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       try {
         state.crews = (await api('/admin/crews')).data;
         $('crewList').innerHTML = state.crews.length
-          ? state.crews.map((crew) => rowHtml(crew.id, crew.name, crewMeta(crew), visibilityBadge(crew.adminProfile?.isVisible))).join('')
+          ? state.crews.map((crew) => selectableRowHtml('crewBulk', crew.id, crew.name, crewMeta(crew), visibilityBadge(crew.adminProfile?.isVisible))).join('')
           : emptyHtml('동기화된 크루가 없습니다.');
         $('crewList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showCrew(button.dataset.id)));
+        bindBulkSelection('crewBulk', 'crewBulkToolbar', 'crewBulkStatus');
         setStatus('crewStatus', state.crews.length + '명');
       } catch (error) {
         setStatus('crewStatus', error.message, true);
@@ -595,9 +613,10 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       try {
         state.projects = (await api('/admin/projects')).data;
         $('projectList').innerHTML = state.projects.length
-          ? state.projects.map((project) => rowHtml(project.id, project.titleKo, projectMeta(project), visibilityBadge(project.adminProfile?.isVisible))).join('')
+          ? state.projects.map((project) => selectableRowHtml('projectBulk', project.id, project.titleKo, projectMeta(project), visibilityBadge(project.adminProfile?.isVisible))).join('')
           : emptyHtml('동기화된 프로젝트가 없습니다.');
         $('projectList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showProject(button.dataset.id)));
+        bindBulkSelection('projectBulk', 'projectBulkToolbar', 'projectBulkStatus');
         setStatus('projectStatus', state.projects.length + '개');
       } catch (error) {
         setStatus('projectStatus', error.message, true);
@@ -684,6 +703,9 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     function rowHtml(id, title, meta, badgeHtml = '') {
       return '<div class="row"><div><div class="title">' + esc(title || '') + '</div><div class="meta">' + esc(meta || '') + '</div></div><div class="toolbar" style="margin:0">' + badgeHtml + '<button data-id="' + esc(id) + '">열기</button></div></div>';
     }
+    function selectableRowHtml(name, id, title, meta, badgeHtml = '') {
+      return '<div class="row selectable"><input type="checkbox" name="' + esc(name) + '" data-id="' + esc(id) + '"><div><div class="title">' + esc(title || '') + '</div><div class="meta">' + esc(meta || '') + '</div></div><div class="toolbar" style="margin:0">' + badgeHtml + '<button data-id="' + esc(id) + '">열기</button></div></div>';
+    }
     function checkboxListHtml(name, items, selectedIds, labeler) {
       if (!items.length) return emptyHtml('표시할 항목이 없습니다.');
       return items.map((item, index) =>
@@ -732,6 +754,29 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         isVisible: input.checked,
         sortOrder: index,
       }));
+    }
+    function collectBulkIds(name) {
+      return Array.from(document.querySelectorAll('input[name="' + name + '"]:checked')).map((input) => input.dataset.id);
+    }
+    function bindBulkSelection(name, toolbarId, statusId) {
+      document.querySelectorAll('input[name="' + name + '"]').forEach((input) => {
+        input.addEventListener('change', () => updateBulkToolbar(name, toolbarId, statusId));
+      });
+      updateBulkToolbar(name, toolbarId, statusId);
+    }
+    function updateBulkToolbar(name, toolbarId, statusId) {
+      const count = collectBulkIds(name).length;
+      $(toolbarId).classList.toggle('hidden', count === 0);
+      $(statusId).textContent = count + '개 선택';
+    }
+    async function updateSelectedVisibility(name, pathPrefix, isVisible, reload) {
+      const ids = collectBulkIds(name);
+      if (ids.length === 0) return;
+      await Promise.all(ids.map((id) => api(pathPrefix + '/' + id, {
+        method: 'PATCH',
+        body: JSON.stringify({ isVisible }),
+      })));
+      await reload();
     }
     function isCrewProjectCandidate(project, crewId) {
       if (Array.isArray(project.participantOverrides) && project.participantOverrides.length > 0) {
@@ -784,6 +829,10 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     $('refreshCrews').onclick = loadCrews;
     $('refreshProjects').onclick = loadProjects;
     $('refreshBlogs').onclick = loadBlogs;
+    $('bulkShowCrews').onclick = () => updateSelectedVisibility('crewBulk', '/admin/crews', true, loadCrews);
+    $('bulkHideCrews').onclick = () => updateSelectedVisibility('crewBulk', '/admin/crews', false, loadCrews);
+    $('bulkShowProjects').onclick = () => updateSelectedVisibility('projectBulk', '/admin/projects', true, loadProjects);
+    $('bulkHideProjects').onclick = () => updateSelectedVisibility('projectBulk', '/admin/projects', false, loadProjects);
     boot();
   </script>
 </body>
