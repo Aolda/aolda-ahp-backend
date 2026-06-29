@@ -241,6 +241,22 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       border-radius: 16px;
       background: var(--secondary);
     }
+    .blog-group {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--secondary);
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .blog-group summary {
+      cursor: pointer;
+      padding: 12px 14px;
+      font-weight: 800;
+      color: var(--foreground);
+    }
+    .blog-group .check-list {
+      padding: 0 12px 12px;
+    }
     .form-row {
       display: grid;
       grid-template-columns: 88px minmax(180px, 1fr) minmax(160px, 1fr);
@@ -374,7 +390,10 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         <div class="grid">
           <div class="card">
             <div class="card-head">
-              <h3>크루 목록</h3>
+              <div class="toolbar" style="margin:0">
+                <input id="crewBulkAll" type="checkbox" title="전체 선택" />
+                <h3>크루 목록</h3>
+              </div>
               <span id="crewStatus" class="status"></span>
             </div>
             <div class="list" id="crewList"></div>
@@ -402,7 +421,10 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         <div class="grid">
           <div class="card">
             <div class="card-head">
-              <h3>프로젝트 목록</h3>
+              <div class="toolbar" style="margin:0">
+                <input id="projectBulkAll" type="checkbox" title="전체 선택" />
+                <h3>프로젝트 목록</h3>
+              </div>
               <span id="projectStatus" class="status"></span>
             </div>
             <div class="list" id="projectList"></div>
@@ -589,7 +611,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         + '<h3>참여 프로젝트 공개</h3><div class="meta">프로젝트에서 참여자로 선택된 항목만 표시됩니다. 기본값은 공개이며, 체크를 해제하면 이 크루 프로필에서 숨깁니다.</div>'
         + '<div id="crewProjects" class="check-list">' + projectVisibilityListHtml(candidateProjects, explicitProjectVisibilities) + '</div>'
         + '<div class="toolbar"><button id="saveCrewProjects" class="primary">프로젝트 공개 저장</button></div>'
-        + '<h3>공개 블로그</h3><div id="crewBlogs" class="check-list">' + checkboxListHtml('crewBlog', state.blogs, visibleBlogIds, (item) => item.title) + '</div>'
+        + '<h3>공개 블로그</h3><div class="meta">작성자로 연결된 블로그만 프로젝트별로 표시됩니다.</div><div id="crewBlogs">' + crewBlogGroupsHtml(crew, visibleBlogIds) + '</div>'
         + '<div class="toolbar"><button id="saveCrewBlogs" class="primary">블로그 공개 저장</button></div>';
       $('saveCrew').onclick = async () => {
         await api('/admin/crews/' + id, { method: 'PATCH', body: JSON.stringify({ isVisible: $('crewVisible').checked, description: $('crewDescription').value }) });
@@ -608,14 +630,14 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       $('saveCrewProjects').onclick = async () => {
         await api('/admin/crews/' + id + '/projects', {
           method: 'PUT',
-          body: JSON.stringify({ projects: collectCheckedItems('crewProject', 'projectSourceId') }),
+          body: JSON.stringify({ projects: collectCheckedItemsIn('crewProjects', 'crewProject', 'projectSourceId') }),
         });
         await showCrew(id);
       };
       $('saveCrewBlogs').onclick = async () => {
         await api('/admin/crews/' + id + '/blogs', {
           method: 'PUT',
-          body: JSON.stringify({ blogs: collectCheckedItems('crewBlog', 'blogPostSourceId') }),
+          body: JSON.stringify({ blogs: collectCheckedItemsIn('crewBlogs', 'crewBlog', 'blogPostSourceId') }),
         });
         await showCrew(id);
       };
@@ -685,7 +707,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       $('saveProjectParticipants').onclick = async () => {
         await api('/admin/projects/' + id + '/participants', {
           method: 'PUT',
-          body: JSON.stringify({ participants: collectCheckedItems('projectParticipant', 'crewSourceId') }),
+          body: JSON.stringify({ participants: collectCheckedItemsIn('projectParticipants', 'projectParticipant', 'crewSourceId') }),
         });
         await loadProjects();
         await showProject(id);
@@ -693,7 +715,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       $('saveProjectBlogs').onclick = async () => {
         await api('/admin/projects/' + id + '/featured-blogs', {
           method: 'PUT',
-          body: JSON.stringify({ blogs: collectCheckedItems('projectBlog', 'blogPostSourceId').map(({ blogPostSourceId }, index) => ({ blogPostSourceId, sortOrder: index })) }),
+          body: JSON.stringify({ blogs: collectCheckedItemsIn('projectBlogs', 'projectBlog', 'blogPostSourceId').filter((item) => item.isVisible).map(({ blogPostSourceId }, index) => ({ blogPostSourceId, sortOrder: index })) }),
         });
         await showProject(id);
       };
@@ -755,6 +777,20 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         return '<label class="check-item"><input type="checkbox" name="crewProject" data-id="' + esc(project.id) + '" data-order="' + index + '" ' + (checked ? 'checked' : '') + '><span><strong>' + esc(project.titleKo) + '</strong><div class="meta">' + esc(projectMeta(project)) + '</div></span></label>';
       }).join('');
     }
+    function crewBlogGroupsHtml(crew, visibleBlogIds) {
+      const blogs = state.blogs.filter((blog) => crewMatchesParticipantRefs(crew, blog.participantRefs));
+      if (!blogs.length) return emptyHtml('작성자로 연결된 블로그가 없습니다.');
+      const groups = new Map();
+      for (const blog of blogs) {
+        const projectName = blog.projectName || '프로젝트 미지정';
+        groups.set(projectName, [...(groups.get(projectName) || []), blog]);
+      }
+      return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right, 'ko')).map(([projectName, items]) =>
+        '<details class="blog-group"><summary>&gt; ' + esc(projectName) + ' -----------</summary><div class="check-list">'
+        + items.map((blog, index) => '<label class="check-item"><input type="checkbox" name="crewBlog" data-id="' + esc(blog.id) + '" data-order="' + index + '" ' + (visibleBlogIds.has(blog.id) ? 'checked' : '') + '><span><strong>' + esc(blog.title) + '</strong><div class="meta">' + esc(blogMeta(blog)) + '</div></span></label>').join('')
+        + '</div></details>'
+      ).join('');
+    }
     function termTeamRowHtml(item) {
       return '<div class="form-row term-row">'
         + '<input data-field="generation" inputmode="numeric" placeholder="기수" value="' + esc(item.generation ?? '') + '">'
@@ -791,6 +827,13 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         sortOrder: index,
       }));
     }
+    function collectCheckedItemsIn(containerId, name, idField) {
+      return Array.from($(containerId).querySelectorAll('input[name="' + name + '"]')).map((input, index) => ({
+        [idField]: input.dataset.id,
+        isVisible: input.checked,
+        sortOrder: index,
+      }));
+    }
     async function ensureCrewsData() {
       if (state.crews.length === 0) {
         state.crews = (await api('/admin/crews')).data;
@@ -809,11 +852,29 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         input.addEventListener('change', () => updateBulkToolbar(name, toolbarId, statusId));
       });
       updateBulkToolbar(name, toolbarId, statusId);
+      syncBulkAllCheckbox(name);
     }
     function updateBulkToolbar(name, toolbarId, statusId) {
       const count = collectBulkIds(name).length;
       $(toolbarId).classList.toggle('hidden', count === 0);
       $(statusId).textContent = count + '개 선택';
+      syncBulkAllCheckbox(name);
+    }
+    function bindBulkAllCheckbox(inputId, name, toolbarId, statusId) {
+      $(inputId).addEventListener('change', (event) => {
+        document.querySelectorAll('input[name="' + name + '"]').forEach((input) => {
+          input.checked = event.target.checked;
+        });
+        updateBulkToolbar(name, toolbarId, statusId);
+      });
+    }
+    function syncBulkAllCheckbox(name) {
+      const checkboxId = name === 'crewBulk' ? 'crewBulkAll' : name === 'projectBulk' ? 'projectBulkAll' : '';
+      if (!checkboxId || !$(checkboxId)) return;
+      const inputs = Array.from(document.querySelectorAll('input[name="' + name + '"]'));
+      const checkedCount = inputs.filter((input) => input.checked).length;
+      $(checkboxId).checked = inputs.length > 0 && checkedCount === inputs.length;
+      $(checkboxId).indeterminate = checkedCount > 0 && checkedCount < inputs.length;
     }
     async function updateSelectedVisibility(name, pathPrefix, isVisible, reload) {
       const ids = collectBulkIds(name);
@@ -946,6 +1007,8 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     $('crewSearch').addEventListener('input', renderCrewList);
     $('projectSearch').addEventListener('input', renderProjectList);
     $('blogSearch').addEventListener('input', renderBlogList);
+    bindBulkAllCheckbox('crewBulkAll', 'crewBulk', 'crewBulkToolbar', 'crewBulkStatus');
+    bindBulkAllCheckbox('projectBulkAll', 'projectBulk', 'projectBulkToolbar', 'projectBulkStatus');
     $('bulkShowCrews').onclick = () => updateSelectedVisibility('crewBulk', '/admin/crews', true, loadCrews);
     $('bulkHideCrews').onclick = () => updateSelectedVisibility('crewBulk', '/admin/crews', false, loadCrews);
     $('bulkShowProjects').onclick = () => updateSelectedVisibility('projectBulk', '/admin/projects', true, loadProjects);
