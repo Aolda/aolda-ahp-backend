@@ -1,6 +1,7 @@
 import { readAppEnv } from '../common/config/env';
 import { ContentSourceRepository } from '../modules/admin/datasources/content-source.repository';
 import { NotionContentSyncService } from '../modules/admin/services/notion-content-sync.service';
+import { ProfileImageFileStorage } from '../modules/team/datasources/profile-image-file-storage';
 import { createNotionClient } from '../util/notion/client';
 import { getPrismaClient } from '../util/prisma';
 
@@ -20,6 +21,10 @@ async function main(): Promise<void> {
     createNotionClient(env.notion.apiKey),
     env.notion.teamDbIds,
     new ContentSourceRepository(prisma),
+    new ProfileImageFileStorage(
+      env.profileImage.storageDir,
+      env.profileImage.publicBaseUrl,
+    ),
   );
 
   try {

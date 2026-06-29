@@ -33,13 +33,16 @@ export class ProfileImageFileStorage {
       throw new Error(`Failed to download profile image: ${response.status} ${response.statusText}`);
     }
 
-    const contentType = this.normalizeContentType(response.headers.get('content-type'));
+    const responseContentType = this.normalizeContentType(response.headers.get('content-type'));
+    const bytes = Buffer.from(await response.arrayBuffer());
+    const detectedContentType = this.detectImageContentType(bytes);
+    const contentType =
+      detectedContentType ?? this.resolveTrustedResponseImageContentType(responseContentType);
 
-    if (!contentType.startsWith('image/')) {
-      throw new Error(`Profile image response is not an image: ${contentType}`);
+    if (!contentType) {
+      throw new Error(`Profile image response is not an image: ${responseContentType}`);
     }
 
-    const bytes = Buffer.from(await response.arrayBuffer());
     const contentHash = createHash('sha256').update(bytes).digest('hex');
     const extension = this.resolveExtension(contentType, imageUrl);
     const fileName = `${this.safeFileStem(notionPageId)}-${contentHash.slice(0, 16)}${extension}`;
@@ -61,6 +64,47 @@ export class ProfileImageFileStorage {
 
   private normalizeContentType(value: string | null): string {
     return value?.split(';')[0]?.trim().toLowerCase() || 'application/octet-stream';
+  }
+
+  private resolveTrustedResponseImageContentType(contentType: string): string | null {
+    if (!contentType.startsWith('image/')) {
+      return null;
+    }
+
+    return contentType;
+  }
+
+  private detectImageContentType(bytes: Buffer): string | null {
+    if (bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) {
+      return 'image/jpeg';
+    }
+
+    if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+      return 'image/png';
+    }
+
+    if (
+      bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      bytes.subarray(8, 12).toString('ascii') === 'WEBP'
+    ) {
+      return 'image/webp';
+    }
+
+    const gifSignature = bytes.subarray(0, 6).toString('ascii');
+    if (gifSignature === 'GIF87a' || gifSignature === 'GIF89a') {
+      return 'image/gif';
+    }
+
+    if (bytes.subarray(4, 12).toString('ascii') === 'ftypavif') {
+      return 'image/avif';
+    }
+
+    const textStart = bytes.subarray(0, 512).toString('utf8').trimStart().toLowerCase();
+    if (textStart.startsWith('<svg') || textStart.startsWith('<?xml')) {
+      return 'image/svg+xml';
+    }
+
+    return null;
   }
 
   private resolveExtension(contentType: string, imageUrl: string): string {

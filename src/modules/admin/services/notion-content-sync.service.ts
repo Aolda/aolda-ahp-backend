@@ -18,6 +18,7 @@ import { parseActivityMetadataSeed } from '../../team/notion/parsers/activity-me
 import { parseActivityPage } from '../../team/notion/parsers/activity-page.parser';
 import { parseBlogPostPage } from '../../team/notion/parsers/blog-post-page.parser';
 import { parseCrewGenerationMappingPage } from '../../team/notion/parsers/crew-generation-mapping-page.parser';
+import { ProfileImageFileStorage } from '../../team/datasources/profile-image-file-storage';
 
 const DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID = '355a7bac-f955-80da-b748-000b2233c7dd';
 const DEFAULT_STUDY_DATA_SOURCE_ID = '457a7bac-f955-822a-9359-0706ae009fca';
@@ -48,6 +49,7 @@ export class NotionContentSyncService {
     private readonly notionClient: Client,
     private readonly dbIds: NotionContentSyncDbIds,
     private readonly contentSourceRepository: ContentSourceRepository,
+    private readonly profileImageFileStorage?: ProfileImageFileStorage,
   ) {}
 
   async syncAll(): Promise<NotionContentSyncSummary> {
@@ -81,13 +83,17 @@ export class NotionContentSyncService {
       const profileAccountIds = extractProfileAccountIds(page);
       const generations = extractGenerationNumbers(page);
       const detailSource = await crewFetcher.fetchDetailSource(page, null);
+      const profileImageUrl = await this.resolveProfileImageUrl(
+        page.id,
+        detailSource.profileImageUrl,
+      );
       const result = await this.contentSourceRepository.upsertCrewSource({
         sourceKey: this.buildCrewSourceKey(page, profileAccountIds),
         primaryNotionPageId: page.id,
         profileAccountIds,
         name: extractCrewName(page),
         email: this.extractCrewEmailOrNull(page),
-        profileImageUrl: detailSource.profileImageUrl,
+        profileImageUrl,
         notionDescription: detailSource.description,
         joinedGen: generations[0] ?? null,
         sourcePayload: page as never,
@@ -118,6 +124,25 @@ export class NotionContentSyncService {
     }
 
     return summary;
+  }
+
+  private async resolveProfileImageUrl(
+    notionPageId: string,
+    sourceImageUrl: string | null,
+  ): Promise<string | null> {
+    if (!sourceImageUrl || !this.profileImageFileStorage) {
+      return sourceImageUrl;
+    }
+
+    try {
+      const storedImage = await this.profileImageFileStorage.saveFromUrl(
+        notionPageId,
+        sourceImageUrl,
+      );
+      return storedImage.publicUrl;
+    } catch {
+      return sourceImageUrl;
+    }
   }
 
   async syncProjects(): Promise<SyncEntitySummary> {

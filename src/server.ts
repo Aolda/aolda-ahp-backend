@@ -102,12 +102,21 @@ function createInternalExampleService(useMockData: boolean): InternalExampleServ
 }
 
 function registerProfileImageStaticRoute(app: FastifyInstance, env: AppEnv): void {
-  const publicBasePath = env.profileImage.publicBaseUrl.replace(/\/$/, '');
+  const publicBaseUrl = env.profileImage.publicBaseUrl.replace(/\/$/, '');
+  const publicBasePath = publicBaseUrl.startsWith('/')
+    ? publicBaseUrl
+    : (() => {
+        try {
+          return new URL(publicBaseUrl).pathname.replace(/\/$/, '');
+        } catch {
+          return null;
+        }
+      })();
 
-  if (!publicBasePath.startsWith('/')) {
+  if (!publicBasePath?.startsWith('/')) {
     app.log.warn(
       { PROFILE_IMAGE_PUBLIC_BASE_URL: env.profileImage.publicBaseUrl },
-      'Profile image public base URL is not a relative path; static serving is disabled',
+      'Profile image public base URL path cannot be resolved; static serving is disabled',
     );
     return;
   }
@@ -183,6 +192,10 @@ export async function buildApp(): Promise<FastifyInstance> {
           createNotionClient(env.notion.apiKey),
           env.notion.teamDbIds,
           new ContentSourceRepository(getPrismaClient()),
+          new ProfileImageFileStorage(
+            env.profileImage.storageDir,
+            env.profileImage.publicBaseUrl,
+          ),
         )
       : undefined;
   const notionCrewTeamWriteService =
