@@ -367,6 +367,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
               <button id="bulkShowCrews">선택대상 일괄공개</button>
               <button id="bulkHideCrews">선택대상 일괄비공개</button>
             </div>
+            <input id="crewSearch" style="width:260px" placeholder="크루명, 참여 프로젝트명 검색" />
             <button id="refreshCrews">새로고침</button>
           </div>
         </div>
@@ -394,6 +395,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
               <button id="bulkShowProjects">선택대상 일괄공개</button>
               <button id="bulkHideProjects">선택대상 일괄비공개</button>
             </div>
+            <input id="projectSearch" style="width:260px" placeholder="프로젝트명, 크루명 검색" />
             <button id="refreshProjects">새로고침</button>
           </div>
         </div>
@@ -415,14 +417,20 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
             <h2>블로그 관리</h2>
             <div class="page-subtitle">Notion에서 수집된 블로그 원천 목록입니다.</div>
           </div>
-          <button id="refreshBlogs">새로고침</button>
-        </div>
-        <div class="card">
-          <div class="card-head">
-            <h3>블로그 목록</h3>
-            <span id="blogStatus" class="status"></span>
+          <div class="toolbar">
+            <input id="blogSearch" style="width:280px" placeholder="블로그 제목, 프로젝트명, 크루명 검색" />
+            <button id="refreshBlogs">새로고침</button>
           </div>
-          <div class="list" id="blogList"></div>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <div class="card-head">
+              <h3>블로그 목록</h3>
+              <span id="blogStatus" class="status"></span>
+            </div>
+            <div class="list" id="blogList"></div>
+          </div>
+          <div class="card"><div class="content" id="blogDetail"></div></div>
         </div>
       </div>
     </section>
@@ -547,15 +555,20 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       setStatus('crewStatus', '불러오는 중...');
       try {
         state.crews = (await api('/admin/crews')).data;
-        $('crewList').innerHTML = state.crews.length
-          ? state.crews.map((crew) => selectableRowHtml('crewBulk', crew.id, crew.name, crewMeta(crew), visibilityBadge(crew.adminProfile?.isVisible))).join('')
-          : emptyHtml('동기화된 크루가 없습니다.');
-        $('crewList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showCrew(button.dataset.id)));
-        bindBulkSelection('crewBulk', 'crewBulkToolbar', 'crewBulkStatus');
-        setStatus('crewStatus', state.crews.length + '명');
+        await ensureProjectsData();
+        renderCrewList();
       } catch (error) {
         setStatus('crewStatus', error.message, true);
       }
+    }
+    function renderCrewList() {
+      const crews = state.crews.filter(matchesCrewSearch);
+      $('crewList').innerHTML = crews.length
+        ? crews.map((crew) => selectableRowHtml('crewBulk', crew.id, crew.name, crewMeta(crew), visibilityBadge(crew.adminProfile?.isVisible))).join('')
+        : emptyHtml(state.crews.length ? '검색 결과가 없습니다.' : '동기화된 크루가 없습니다.');
+      $('crewList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showCrew(button.dataset.id)));
+      bindBulkSelection('crewBulk', 'crewBulkToolbar', 'crewBulkStatus');
+      setStatus('crewStatus', crews.length + '명');
     }
 
     async function showCrew(id) {
@@ -612,15 +625,20 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       setStatus('projectStatus', '불러오는 중...');
       try {
         state.projects = (await api('/admin/projects')).data;
-        $('projectList').innerHTML = state.projects.length
-          ? state.projects.map((project) => selectableRowHtml('projectBulk', project.id, project.titleKo, projectMeta(project), visibilityBadge(project.adminProfile?.isVisible))).join('')
-          : emptyHtml('동기화된 프로젝트가 없습니다.');
-        $('projectList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showProject(button.dataset.id)));
-        bindBulkSelection('projectBulk', 'projectBulkToolbar', 'projectBulkStatus');
-        setStatus('projectStatus', state.projects.length + '개');
+        await ensureCrewsData();
+        renderProjectList();
       } catch (error) {
         setStatus('projectStatus', error.message, true);
       }
+    }
+    function renderProjectList() {
+      const projects = state.projects.filter(matchesProjectSearch);
+      $('projectList').innerHTML = projects.length
+        ? projects.map((project) => selectableRowHtml('projectBulk', project.id, project.titleKo, projectMeta(project), visibilityBadge(project.adminProfile?.isVisible))).join('')
+        : emptyHtml(state.projects.length ? '검색 결과가 없습니다.' : '동기화된 프로젝트가 없습니다.');
+      $('projectList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showProject(button.dataset.id)));
+      bindBulkSelection('projectBulk', 'projectBulkToolbar', 'projectBulkStatus');
+      setStatus('projectStatus', projects.length + '개');
     }
 
     async function showProject(id) {
@@ -629,6 +647,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       if (state.blogs.length === 0) await loadBlogs();
       const participantIds = resolveProjectParticipantIds(project, state.crews);
       const featuredBlogIds = new Set(project.featuredBlogs.map((item) => item.blogPostSourceId));
+      const candidateBlogs = blogsForProject(project);
       const periods = project.periodOverrides.length > 0 ? project.periodOverrides : [{ label: '', startedAt: project.startedAt || '', endedAt: project.endedAt || '' }];
       $('projectDetail').innerHTML = '<h2>' + esc(project.titleKo) + '</h2>'
         + '<label class="inline"><input id="projectVisible" type="checkbox" ' + (project.adminProfile?.isVisible ? 'checked' : '') + '> 공개 프로젝트 사용</label>'
@@ -641,7 +660,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         + '<div class="toolbar"><button id="addProjectPeriod">기간 추가</button><button id="saveProjectPeriods" class="primary">진행기간 저장</button></div>'
         + '<h3>참여자</h3><div id="projectParticipants" class="check-list">' + checkboxListHtml('projectParticipant', state.crews, participantIds, (item) => item.name) + '</div>'
         + '<div class="toolbar"><button id="saveProjectParticipants" class="primary">참여자 저장</button></div>'
-        + '<h3>대표 블로그</h3><div id="projectBlogs" class="check-list">' + checkboxListHtml('projectBlog', state.blogs, featuredBlogIds, (item) => item.title) + '</div>'
+        + '<h3>대표 블로그</h3><div class="meta">현재 프로젝트에 기록된 블로그만 표시됩니다.</div><div id="projectBlogs" class="check-list">' + checkboxListHtml('projectBlog', candidateBlogs, featuredBlogIds, (item) => item.title) + '</div>'
         + '<div class="toolbar"><button id="saveProjectBlogs" class="primary">대표 블로그 저장</button></div>';
       $('saveProject').onclick = async () => {
         await api('/admin/projects/' + id, { method: 'PATCH', body: JSON.stringify({
@@ -684,13 +703,30 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       setStatus('blogStatus', '불러오는 중...');
       try {
         state.blogs = (await api('/admin/blogs')).data;
-        $('blogList').innerHTML = state.blogs.length
-          ? state.blogs.map((blog) => rowHtml(blog.id, blog.title, blog.projectName || '프로젝트 미지정', '<span class="badge">원천</span>')).join('')
-          : emptyHtml('동기화된 블로그가 없습니다.');
-        setStatus('blogStatus', state.blogs.length + '개');
+        await Promise.all([ensureCrewsData(), ensureProjectsData()]);
+        renderBlogList();
       } catch (error) {
         setStatus('blogStatus', error.message, true);
       }
+    }
+    function renderBlogList() {
+      const blogs = state.blogs.filter(matchesBlogSearch);
+      $('blogList').innerHTML = blogs.length
+        ? blogs.map((blog) => rowHtml(blog.id, blog.title, blogMeta(blog), '<span class="badge">원천</span>')).join('')
+        : emptyHtml(state.blogs.length ? '검색 결과가 없습니다.' : '동기화된 블로그가 없습니다.');
+      $('blogList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showBlog(button.dataset.id)));
+      setStatus('blogStatus', blogs.length + '개');
+    }
+    function showBlog(id) {
+      const blog = state.blogs.find((item) => item.id === id);
+      if (!blog) {
+        $('blogDetail').innerHTML = emptyHtml('블로그를 찾을 수 없습니다.');
+        return;
+      }
+
+      $('blogDetail').innerHTML = '<h2>' + esc(blog.title) + '</h2>'
+        + '<div class="meta" style="margin-top:8px">' + esc(blogMeta(blog)) + '</div>'
+        + '<div class="content meta" style="padding-left:0">추가 관리 항목은 추후 제공 예정입니다.</div>';
     }
 
     function activityTermRowHtml(item) {
@@ -755,6 +791,16 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         sortOrder: index,
       }));
     }
+    async function ensureCrewsData() {
+      if (state.crews.length === 0) {
+        state.crews = (await api('/admin/crews')).data;
+      }
+    }
+    async function ensureProjectsData() {
+      if (state.projects.length === 0) {
+        state.projects = (await api('/admin/projects')).data;
+      }
+    }
     function collectBulkIds(name) {
       return Array.from(document.querySelectorAll('input[name="' + name + '"]:checked')).map((input) => input.dataset.id);
     }
@@ -786,6 +832,24 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       const crew = state.crews.find((item) => item.id === crewId);
       return Boolean(crew && crewMatchesParticipantRefs(crew, project.participantRefs));
     }
+    function matchesCrewSearch(crew) {
+      const query = normalizeSearch($('crewSearch').value);
+      if (!query) return true;
+      const projectNames = state.projects
+        .filter((project) => isCrewProjectCandidate(project, crew.id))
+        .flatMap(projectSearchValues);
+      return containsSearch([crew.name, ...projectNames], query);
+    }
+    function matchesProjectSearch(project) {
+      const query = normalizeSearch($('projectSearch').value);
+      if (!query) return true;
+      return containsSearch([...projectSearchValues(project), ...projectCrewNames(project)], query);
+    }
+    function matchesBlogSearch(blog) {
+      const query = normalizeSearch($('blogSearch').value);
+      if (!query) return true;
+      return containsSearch([blog.title, blog.projectName, ...blogAuthorNames(blog)], query);
+    }
     function crewMeta(crew) {
       const generations = [...new Set([...(crew.termTeamOverrides || []), ...(crew.termTeamSources || [])].map((item) => item.generation).filter(Boolean))].sort((a, b) => a - b);
       return generations.length ? generations.map((item) => item + '기').join(', ') : '기수 정보 없음';
@@ -795,6 +859,36 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       const period = project.endedAt ? project.startedAt + '~' + project.endedAt : project.startedAt;
       return [period || '기간 미지정', '참여자 ' + count + '명'].join(' · ');
     }
+    function blogMeta(blog) {
+      return [
+        formatDateTime(blog.recordedAt),
+        blogAuthorNames(blog).join(', ') || '작성자 미확인',
+        blog.projectName || '프로젝트 미지정',
+      ].join(' · ');
+    }
+    function blogsForProject(project) {
+      const projectNames = projectSearchValues(project).map(normalizeSearch).filter(Boolean);
+      return state.blogs.filter((blog) => {
+        const blogProjectValues = [blog.projectName, ...(Array.isArray(blog.projectRefs) ? blog.projectRefs : [])]
+          .map(normalizeSearch)
+          .filter(Boolean);
+        return blogProjectValues.some((value) => projectNames.includes(value));
+      });
+    }
+    function projectSearchValues(project) {
+      return [
+        project.titleKo,
+        project.titleEn,
+        project.titleBrief,
+        project.adminProfile?.titleKoOverride,
+        project.adminProfile?.titleEnOverride,
+        project.adminProfile?.titleBriefOverride,
+      ].filter(Boolean);
+    }
+    function projectCrewNames(project) {
+      const participantIds = resolveProjectParticipantIds(project, state.crews);
+      return state.crews.filter((crew) => participantIds.has(crew.id)).map((crew) => crew.name);
+    }
     function resolveProjectParticipantIds(project, crews) {
       if (Array.isArray(project.participantOverrides) && project.participantOverrides.length > 0) {
         return new Set(project.participantOverrides.filter((item) => item.isVisible).map((item) => item.crewSourceId));
@@ -802,12 +896,32 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
 
       return new Set(crews.filter((crew) => crewMatchesParticipantRefs(crew, project.participantRefs)).map((crew) => crew.id));
     }
+    function blogAuthorNames(blog) {
+      return state.crews
+        .filter((crew) => crewMatchesParticipantRefs(crew, blog.participantRefs))
+        .map((crew) => crew.name);
+    }
     function crewMatchesParticipantRefs(crew, participantRefs) {
       if (!Array.isArray(participantRefs) || !Array.isArray(crew.profileAccountIds)) {
         return false;
       }
 
       return crew.profileAccountIds.some((accountId) => participantRefs.includes(accountId));
+    }
+    function containsSearch(values, query) {
+      return values.some((value) => normalizeSearch(value).includes(query));
+    }
+    function normalizeSearch(value) {
+      return String(value ?? '').trim().toLocaleLowerCase('ko');
+    }
+    function formatDateTime(value) {
+      if (!value) return '작성시간 없음';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '작성시간 없음';
+      return new Intl.DateTimeFormat('ko-KR', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(date);
     }
     function visibilityBadge(isVisible) {
       return isVisible ? '<span class="badge public">공개</span>' : '<span class="badge private">비공개</span>';
@@ -829,6 +943,9 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     $('refreshCrews').onclick = loadCrews;
     $('refreshProjects').onclick = loadProjects;
     $('refreshBlogs').onclick = loadBlogs;
+    $('crewSearch').addEventListener('input', renderCrewList);
+    $('projectSearch').addEventListener('input', renderProjectList);
+    $('blogSearch').addEventListener('input', renderBlogList);
     $('bulkShowCrews').onclick = () => updateSelectedVisibility('crewBulk', '/admin/crews', true, loadCrews);
     $('bulkHideCrews').onclick = () => updateSelectedVisibility('crewBulk', '/admin/crews', false, loadCrews);
     $('bulkShowProjects').onclick = () => updateSelectedVisibility('projectBulk', '/admin/projects', true, loadProjects);
