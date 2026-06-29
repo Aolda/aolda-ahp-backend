@@ -80,6 +80,19 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
   );
 
   app.get(
+    '/admin/activity-terms',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: '관리자 활동기수 목록 조회' } as any,
+    },
+    async (_request, reply) => {
+      const contentService = getContentService(deps, reply);
+      if (!contentService) return undefined;
+      return { data: await contentService.listActivityTerms() };
+    },
+  );
+
+  app.get(
     '/admin/crews',
     {
       preHandler: createAdminAuthPreHandler(deps),

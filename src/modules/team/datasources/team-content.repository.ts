@@ -78,9 +78,18 @@ export class TeamContentRepository implements TeamRepository {
         adminProfile: true,
         termTeamSources: { orderBy: { generation: 'asc' } },
         termTeamOverrides: { orderBy: { generation: 'asc' } },
-        projectVisibilities: {
+        projectVisibilities: true,
+        participantOverrides: {
           where: { isVisible: true },
-          include: { projectSource: { include: { adminProfile: true } } },
+          include: {
+            projectSource: {
+              include: {
+                adminProfile: true,
+                crewVisibilities: { where: { crewSourceId: crewId } },
+              },
+            },
+          },
+          orderBy: { sortOrder: 'asc' },
         },
         blogVisibilities: {
           where: { isVisible: true },
@@ -98,16 +107,14 @@ export class TeamContentRepository implements TeamRepository {
       ...this.toCrewListItem(crew),
       crewEmail: crew.email ?? '',
       description: crew.adminProfile?.description ?? DEFAULT_CREW_DESCRIPTION,
-      activities: crew.projectVisibilities
-        .filter((item) => item.projectSource.adminProfile?.isVisible)
-        .map((item) => ({
-          activityId: item.projectSource.id,
-          status: item.projectSource.status ?? 'ACTIVITY_STATUS/PREPARING',
-          startedAt: item.projectSource.startedAt ?? '',
-          activityNames: this.resolveProjectNames(item.projectSource),
-          activityType: 'ACTIVITY_TYPE/PROJECT',
-          description: item.projectSource.adminProfile?.description ?? '',
-        })),
+      activities: this.resolveCrewVisibleProjects(crew).map((project) => ({
+        activityId: project.id,
+        status: project.status ?? 'ACTIVITY_STATUS/PREPARING',
+        startedAt: project.startedAt ?? '',
+        activityNames: this.resolveProjectNames(project),
+        activityType: 'ACTIVITY_TYPE/PROJECT',
+        description: project.adminProfile?.description ?? '',
+      })),
       bloggings: crew.blogVisibilities.map((item) => ({
         title: item.blogPostSource.title,
         postedAt: item.blogPostSource.recordedAt?.toISOString() ?? '',
@@ -231,7 +238,18 @@ export class TeamContentRepository implements TeamRepository {
         adminProfile: true,
         termTeamSources: { orderBy: { generation: 'asc' } },
         termTeamOverrides: { orderBy: { generation: 'asc' } },
-        projectVisibilities: { where: { isVisible: true } },
+        projectVisibilities: true,
+        participantOverrides: {
+          where: { isVisible: true },
+          include: {
+            projectSource: {
+              include: {
+                adminProfile: true,
+                crewVisibilities: true,
+              },
+            },
+          },
+        },
         blogVisibilities: { where: { isVisible: true } },
       },
       orderBy: { name: 'asc' },
@@ -267,7 +285,7 @@ export class TeamContentRepository implements TeamRepository {
       joinedGen: crew.joinedGen ?? crewLog[0]?.generation ?? 0,
       univDepartment: '',
       univJoinedYear: '0000',
-      totalActivities: crew.projectVisibilities.length,
+      totalActivities: this.resolveCrewVisibleProjects(crew).length,
       totalBloggings: crew.blogVisibilities.length,
     };
   }
@@ -310,6 +328,40 @@ export class TeamContentRepository implements TeamRepository {
       type: GENERAL_MEMBER_ROLE,
       department: record.teamName ?? '',
     }));
+  }
+
+  private resolveCrewVisibleProjects(crew: {
+    id: string;
+    participantOverrides: Array<{
+      projectSource: {
+        id: string;
+        sourceArchived: boolean;
+        crewVisibilities: Array<{ crewSourceId: string; isVisible: boolean }>;
+        titleKo: string;
+        titleEn: string | null;
+        titleBrief: string | null;
+        status: string | null;
+        startedAt: string | null;
+        adminProfile: {
+          isVisible: boolean;
+          titleKoOverride: string | null;
+          titleEnOverride: string | null;
+          titleBriefOverride: string | null;
+          description: string | null;
+        } | null;
+      };
+    }>;
+  }) {
+    return crew.participantOverrides
+      .map((item) => item.projectSource)
+      .filter((project) => {
+        if (project.sourceArchived || !project.adminProfile?.isVisible) {
+          return false;
+        }
+
+        const visibility = project.crewVisibilities.find((item) => item.crewSourceId === crew.id);
+        return visibility?.isVisible ?? true;
+      });
   }
 
   private resolveProjectNames(project: {

@@ -23,7 +23,7 @@ async function main(): Promise<void> {
       String(adminPage.headers['content-type'] ?? '').includes('text/html'),
       'admin page must be HTML',
     );
-    assert(adminPage.body.includes('Aolda Admin'), 'admin page must contain dashboard title');
+    assert(adminPage.body.includes('Aolda 관리자 콘솔'), 'admin page must contain dashboard title');
 
     await expectStatus(
       'POST /admin/login without DB',

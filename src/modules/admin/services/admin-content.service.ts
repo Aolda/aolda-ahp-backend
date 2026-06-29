@@ -51,6 +51,49 @@ export interface UpdateProjectFeaturedBlogInput {
 export class AdminContentService {
   constructor(private readonly prisma: PrismaClient) {}
 
+  async listActivityTerms() {
+    const terms = await this.prisma.crewTermTeamSource.findMany({
+      where: { sourceArchived: false },
+      orderBy: [{ generation: 'asc' }, { activityTerm: 'asc' }, { teamName: 'asc' }],
+      select: {
+        generation: true,
+        activityTerm: true,
+        teamName: true,
+        crewSourceId: true,
+      },
+    });
+
+    const termMap = new Map<
+      string,
+      { generation: number; activityTerm: string; teams: Set<string>; crewSourceIds: Set<string> }
+    >();
+
+    for (const term of terms) {
+      const key = `${term.generation}:${term.activityTerm}`;
+      const item =
+        termMap.get(key) ??
+        {
+          generation: term.generation,
+          activityTerm: term.activityTerm,
+          teams: new Set<string>(),
+          crewSourceIds: new Set<string>(),
+        };
+
+      if (term.teamName) {
+        item.teams.add(term.teamName);
+      }
+      item.crewSourceIds.add(term.crewSourceId);
+      termMap.set(key, item);
+    }
+
+    return [...termMap.values()].map((term) => ({
+      generation: term.generation,
+      activityTerm: term.activityTerm,
+      teams: [...term.teams].sort((left, right) => left.localeCompare(right, 'ko')),
+      crewCount: term.crewSourceIds.size,
+    }));
+  }
+
   async listCrews() {
     return this.prisma.crewSource.findMany({
       orderBy: [{ sourceArchived: 'asc' }, { name: 'asc' }],
@@ -124,6 +167,7 @@ export class AdminContentService {
     items: UpdateCrewProjectVisibilityInput[],
   ) {
     await this.ensureCrewExists(crewSourceId);
+    await this.ensureCrewProjectVisibilityTargets(crewSourceId, items);
     return this.prisma.$transaction(async (tx) => {
       await tx.crewProjectVisibility.deleteMany({ where: { crewSourceId } });
       if (items.length > 0) {
@@ -172,6 +216,10 @@ export class AdminContentService {
       include: {
         adminProfile: true,
         periodOverrides: { orderBy: { sortOrder: 'asc' } },
+        participantOverrides: {
+          include: { crewSource: true },
+          orderBy: { sortOrder: 'asc' },
+        },
       },
     });
   }
@@ -313,6 +361,28 @@ export class AdminContentService {
     });
     if (!project) {
       throw new Error(`Project source not found: ${projectSourceId}`);
+    }
+  }
+
+  private async ensureCrewProjectVisibilityTargets(
+    crewSourceId: string,
+    items: UpdateCrewProjectVisibilityInput[],
+  ): Promise<void> {
+    const projectSourceIds = [...new Set(items.map((item) => item.projectSourceId))];
+    if (projectSourceIds.length === 0) {
+      return;
+    }
+
+    const eligibleProjectCount = await this.prisma.projectParticipantOverride.count({
+      where: {
+        crewSourceId,
+        isVisible: true,
+        projectSourceId: { in: projectSourceIds },
+      },
+    });
+
+    if (eligibleProjectCount !== projectSourceIds.length) {
+      throw new Error('Crew project visibility can only be managed for project participants');
     }
   }
 
