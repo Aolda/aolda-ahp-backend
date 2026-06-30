@@ -36,11 +36,17 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       --glass: rgba(255, 255, 255, 0.64);
       --glass-strong: rgba(255, 255, 255, 0.78);
       --glass-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+      --ease-snap: cubic-bezier(0, 1, 1, 1);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: var(--background);
+      background:
+        radial-gradient(900px 460px at 12% 8%, rgba(56, 189, 248, 0.2), transparent 60%),
+        radial-gradient(760px 420px at 94% 18%, rgba(20, 184, 166, 0.18), transparent 58%),
+        radial-gradient(820px 520px at 68% 96%, rgba(148, 163, 184, 0.2), transparent 62%),
+        linear-gradient(145deg, #f8fafc 0%, #eef6f7 48%, #f6f8fb 100%);
+      background-attachment: fixed;
       color: var(--foreground);
       font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 14px;
@@ -73,26 +79,20 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       outline-offset: 2px;
     }
     header {
-      height: 64px;
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      padding: 0 24px;
-      background: rgba(248, 250, 252, 0.78);
-      backdrop-filter: blur(14px);
-      position: sticky;
-      top: 0;
-      z-index: 2;
+      margin-bottom: 26px;
     }
     h1, h2, h3 { margin: 0; color: var(--card-foreground); }
     h1 { font-size: 19px; font-weight: 800; }
-    h2 { font-size: 18px; font-weight: 800; }
+    h2 { font-size: 32px; line-height: 1.12; font-weight: 850; }
     h3 { font-size: 15px; font-weight: 800; }
     main {
       display: grid;
       grid-template-columns: 250px minmax(0, 1fr);
-      min-height: calc(100vh - 64px);
-      transition: grid-template-columns 180ms ease;
+      min-height: 100vh;
+      transition: all 220ms var(--ease-snap);
     }
     main.sidebar-collapsed {
       grid-template-columns: 72px minmax(0, 1fr);
@@ -105,8 +105,11 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       backdrop-filter: blur(18px) saturate(125%);
       box-shadow: var(--glass-shadow);
       align-self: start;
-      min-height: calc(100vh - 80px);
+      height: calc(100vh - 1rem);
+      position: sticky;
+      top: .5rem;
       overflow: hidden;
+      transition: all 220ms var(--ease-snap);
     }
     nav button {
       width: 100%;
@@ -122,6 +125,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       color: var(--muted-foreground);
       box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
       backdrop-filter: blur(14px) saturate(125%);
+      transition: all 220ms var(--ease-snap);
     }
     nav button:hover { background: rgba(255, 255, 255, 0.72); }
     nav button.active {
@@ -145,14 +149,15 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     .nav-logo {
       aspect-ratio: 1 / 1;
-      width: 54px;
+      width: 38px;
       margin: 2px auto 12px;
       border-radius: .75rem;
       background: #e5e7eb;
       box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+      transition: all 220ms var(--ease-snap);
     }
     main:not(.sidebar-collapsed) .nav-logo {
-      width: min(132px, 72%);
+      width: 38px;
     }
     .nav-toggle {
       margin-bottom: 14px;
@@ -163,7 +168,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       flex: 0 0 18px;
       stroke-width: 1.8;
     }
-    section { padding: 22px; }
+    section { padding: 24px 22px 22px; }
     label {
       display: block;
       margin: 14px 0 6px;
@@ -218,9 +223,10 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       margin-bottom: 18px;
     }
     .page-subtitle {
-      margin-top: 5px;
+      margin-top: 8px;
       color: var(--muted-foreground);
-      font-size: 13px;
+      font-size: 16px;
+      line-height: 1.5;
     }
     .grid {
       display: grid;
@@ -356,6 +362,8 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       main.sidebar-collapsed { grid-template-columns: 1fr; }
       nav {
         min-height: auto;
+        height: auto;
+        position: static;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
@@ -397,13 +405,6 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       <path d="M6 4h11a2 2 0 0 1 2 2v14H8a3 3 0 0 1 -3 -3V5a1 1 0 0 1 1 -1"></path><path d="M8 4v17"></path><path d="M10 8h5"></path><path d="M10 12h5"></path>
     </symbol>
   </svg>
-  <header>
-    <div class="toolbar session-card">
-      <span id="session" class="muted"></span>
-      <button id="logout" class="ghost hidden">로그아웃</button>
-    </div>
-  </header>
-
   <div id="loginView" class="login">
     <h2>관리자 로그인</h2>
     <form id="loginForm">
@@ -444,6 +445,12 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       </button>
     </nav>
     <section>
+      <header>
+        <div class="toolbar session-card">
+          <span id="session" class="muted"></span>
+          <button id="logout" class="ghost hidden">로그아웃</button>
+        </div>
+      </header>
       <div id="sync" class="tab">
         <div class="page-head">
           <div>
