@@ -399,8 +399,13 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
         return reply.code(503).send({ message: 'Notion content sync is not configured' });
       }
 
-      const summary = await deps.notionContentSyncService.syncAll();
-      return { summary };
+      try {
+        const summary = await deps.notionContentSyncService.syncAll();
+        return { summary };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Notion content sync failed';
+        return reply.code(500).send({ message });
+      }
     },
   );
 }

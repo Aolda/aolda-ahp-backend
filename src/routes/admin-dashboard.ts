@@ -517,7 +517,13 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       }
       const res = await fetch(path, { ...options, headers });
       const text = await res.text();
-      const data = text ? JSON.parse(text) : null;
+      const contentType = res.headers.get('content-type') || '';
+      let data = null;
+      if (text && contentType.includes('application/json')) {
+        data = JSON.parse(text);
+      } else if (text) {
+        data = { message: text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300) };
+      }
       if (!res.ok) throw new Error(data?.message || res.statusText);
       return data;
     }
