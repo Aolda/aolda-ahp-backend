@@ -89,7 +89,9 @@ function createTeamQueryService(
 }
 
 function createCloudQueryService(useMockData: boolean): CloudQueryService {
-  const repository = useMockData ? new CloudMockRepository() : new CloudPrismaRepository();
+  const repository = useMockData
+    ? new CloudMockRepository()
+    : new CloudPrismaRepository(getPrismaClient());
   return new CloudQueryService(repository);
 }
 

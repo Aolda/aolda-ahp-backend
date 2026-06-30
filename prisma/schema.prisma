@@ -143,6 +143,7 @@ model ProjectSource {
   updatedAt          DateTime @updatedAt
 
   adminProfile         ProjectAdminProfile?
+  cloudProducts        CloudProduct[]
   crewVisibilities     CrewProjectVisibility[]
   featuredBlogs        ProjectFeaturedBlog[]
   periodOverrides      ProjectPeriodOverride[]
@@ -258,6 +259,156 @@ model ProjectParticipantOverride {
 
   @@unique([projectSourceId, crewSourceId])
   @@index([crewSourceId])
+}
+
+model CloudBriefMetric {
+  key       String   @id
+  value     Int      @default(0)
+  unit      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CloudUseProject {
+  id                   String   @id @default(uuid())
+  teamName             String
+  description          String?  @db.Text
+  durationFromYear     Int?
+  durationFromSemester Int?
+  durationToYear       Int?
+  durationToSemester   Int?
+  projectImageUrl      String?
+  isVisible            Boolean  @default(true)
+  sortOrder            Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model CloudFaqCategory {
+  code             String   @id
+  categoryTitle    String
+  categoryImageUrl String?
+  isVisible        Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  faqs CloudFaq[]
+}
+
+model CloudFaq {
+  id           String   @id @default(uuid())
+  publicId     Int      @unique @default(autoincrement())
+  categoryCode String
+  faqTitle     String
+  faqAnswer    String   @db.Text
+  isVisible    Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  category CloudFaqCategory @relation(fields: [categoryCode], references: [code], onDelete: Restrict)
+
+  @@index([categoryCode])
+}
+
+model CloudNotice {
+  id          String   @id @default(uuid())
+  publicId    Int      @unique @default(autoincrement())
+  noticeType  String
+  noticeTitle String
+  content     String   @db.Text
+  authorId    Int?
+  authorName  String?
+  readCount   Int      @default(0)
+  isVisible   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attachments CloudNoticeAttachment[]
+}
+
+model CloudNoticeAttachment {
+  id            String   @id @default(uuid())
+  publicId      Int      @unique @default(autoincrement())
+  cloudNoticeId String
+  fileUrl       String
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  notice CloudNotice @relation(fields: [cloudNoticeId], references: [id], onDelete: Cascade)
+
+  @@index([cloudNoticeId])
+}
+
+model CloudProductCategory {
+  code             String   @id
+  categoryTitle    String
+  categoryImageUrl String?
+  isVisible        Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  products CloudProduct[]
+}
+
+model CloudProduct {
+  id              String   @id @default(uuid())
+  publicId        Int      @unique @default(autoincrement())
+  categoryCode    String
+  projectSourceId String?
+  productIconUrl  String?
+  productName     String
+  description     String   @db.Text
+  cloudLink       String?
+  content         String   @db.Text
+  isVisible       Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  category        CloudProductCategory         @relation(fields: [categoryCode], references: [code], onDelete: Restrict)
+  projectSource   ProjectSource?               @relation(fields: [projectSourceId], references: [id], onDelete: SetNull)
+  participants    CloudProductParticipant[]
+  relatedServices CloudProductRelatedService[]
+
+  @@index([categoryCode])
+  @@index([projectSourceId])
+}
+
+model CloudProductParticipant {
+  id             String   @id @default(uuid())
+  cloudProductId String
+  crewSourceId   String?
+  crewPublicId   Int?
+  profileUrl     String?
+  crewName       String
+  univDepartment String?
+  univJoinedYear String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  product CloudProduct @relation(fields: [cloudProductId], references: [id], onDelete: Cascade)
+
+  @@index([cloudProductId])
+}
+
+model CloudProductRelatedService {
+  id             String   @id @default(uuid())
+  cloudProductId String
+  pageTitle      String
+  thumbnailUrl   String?
+  serviceLink    String?
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  product CloudProduct @relation(fields: [cloudProductId], references: [id], onDelete: Cascade)
+
+  @@index([cloudProductId])
 }
 
 model SyncJob {

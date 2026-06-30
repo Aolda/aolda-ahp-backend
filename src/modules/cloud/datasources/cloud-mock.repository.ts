@@ -44,7 +44,10 @@ export class CloudMockRepository implements CloudRepository {
     return PRODUCT_LIST_EXAMPLE;
   }
 
-  async getProductDetail(_productId: string): Promise<ProductDetailResponse> {
+  async getProductDetail(
+    _productId: string,
+    _requestOrigin: string,
+  ): Promise<ProductDetailResponse> {
     return PRODUCT_DETAIL_EXAMPLE;
   }
 }

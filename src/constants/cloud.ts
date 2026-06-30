@@ -1,7 +1,6 @@
 export const BRIEF_EXAMPLE = {
   userCount: { value: 12540, unit: '명' },
   projectCount: { value: 312, unit: '개' },
-  __________: { value: 48, unit: '개' },
 };
 
 export const USE_PROJECT_EXAMPLE = {

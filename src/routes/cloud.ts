@@ -1,4 +1,4 @@
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import {
   BRIEF_EXAMPLE,
@@ -94,8 +94,12 @@ export async function registerCloudRoutes(app: FastifyInstance, deps: CloudRoute
         },
       } as any,
     },
-    async (request: FastifyRequest<{ Params: { notice_id: string } }>) =>
-      cloudQueryService.getNoticeDetail(request.params.notice_id),
+    async (request: FastifyRequest<{ Params: { notice_id: string } }>, reply) =>
+      sendCloudDetailResponse(
+        reply,
+        () => cloudQueryService.getNoticeDetail(request.params.notice_id),
+        'ERR_NOTICE_NOT_FOUND',
+      ),
   );
 
   app.get(
@@ -122,12 +126,55 @@ export async function registerCloudRoutes(app: FastifyInstance, deps: CloudRoute
         response: {
           200: successSchema(PRODUCT_DETAIL_EXAMPLE),
           400: errorSchema('ERR_INVALID_REQUEST', 'Bad Request'),
-          404: errorSchema('ERR_NOTICE_NOT_FOUND', 'Not Found'),
+          404: errorSchema('ERR_PRODUCT_NOT_FOUND', 'Not Found'),
           503: errorSchema('ERR_DB_REQ_FAILED', 'Service Unavailable'),
         },
       } as any,
     },
-    async (request: FastifyRequest<{ Params: { product_id: string } }>) =>
-      cloudQueryService.getProductDetail(request.params.product_id),
+    async (request: FastifyRequest<{ Params: { product_id: string } }>, reply) =>
+      sendCloudDetailResponse(
+        reply,
+        () =>
+          cloudQueryService.getProductDetail(
+            request.params.product_id,
+            getRequestOrigin(request),
+          ),
+        'ERR_PRODUCT_NOT_FOUND',
+      ),
   );
+}
+
+async function sendCloudDetailResponse<T>(
+  reply: FastifyReply,
+  run: () => Promise<T>,
+  notFoundCode: string,
+): Promise<T | unknown> {
+  try {
+    return await run();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message.startsWith('Invalid ')) {
+      return reply.code(400).send({ code: 'ERR_INVALID_REQUEST' });
+    }
+    if (message.includes('not found')) {
+      return reply.code(404).send({ code: notFoundCode });
+    }
+
+    throw error;
+  }
+}
+
+function getRequestOrigin(request: FastifyRequest): string {
+  const protocol = firstHeaderValue(request.headers['x-forwarded-proto']) ?? 'http';
+  const host =
+    firstHeaderValue(request.headers['x-forwarded-host']) ??
+    firstHeaderValue(request.headers.host) ??
+    'localhost';
+
+  return `${protocol}://${host}`;
+}
+
+function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value?.split(',')[0]?.trim() || undefined;
 }

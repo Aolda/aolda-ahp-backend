@@ -37,7 +37,7 @@ export class CloudQueryService {
     return this.cloudRepository.getProductList();
   }
 
-  async getProductDetail(productId: string): Promise<ProductDetailResponse> {
-    return this.cloudRepository.getProductDetail(productId);
+  async getProductDetail(productId: string, requestOrigin: string): Promise<ProductDetailResponse> {
+    return this.cloudRepository.getProductDetail(productId, requestOrigin);
   }
 }
