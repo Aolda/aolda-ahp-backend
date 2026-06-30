@@ -194,10 +194,6 @@ export async function buildApp(): Promise<FastifyInstance> {
           createNotionClient(env.notion.apiKey),
           env.notion.teamDbIds,
           new ContentSourceRepository(getPrismaClient()),
-          new ProfileImageFileStorage(
-            env.profileImage.storageDir,
-            env.profileImage.publicBaseUrl,
-          ),
         )
       : undefined;
   const notionCrewTeamWriteService =
