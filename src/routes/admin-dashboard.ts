@@ -499,6 +499,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       projects: [],
       cloudProducts: [],
       blogs: [],
+      syncPollTimer: null,
     };
     const $ = (id) => document.getElementById(id);
 
@@ -588,17 +589,86 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       });
     });
 
-    async function loadSync() {}
-    $('syncNow').addEventListener('click', async () => {
-      $('syncOutput').textContent = '동기화 중입니다...';
+    async function loadSync() {
       try {
-        const result = await api('/admin/sync/notion', { method: 'POST' });
-        $('syncOutput').textContent = JSON.stringify(result, null, 2);
-        await Promise.all([loadActivityTerms(), loadCrews(), loadProjects(), loadCloudProducts(), loadBlogs()]);
+        const result = await api('/admin/sync/notion/jobs/latest');
+        renderSyncJob(result.job);
+        if (result.job?.status === 'RUNNING') {
+          pollSyncJob(result.job.id);
+        }
       } catch (error) {
         $('syncOutput').textContent = error.message;
       }
+    }
+    $('syncNow').addEventListener('click', async () => {
+      $('syncNow').disabled = true;
+      $('syncOutput').textContent = '동기화 작업을 시작하는 중입니다...';
+      try {
+        const result = await api('/admin/sync/notion', { method: 'POST' });
+        renderSyncJob(result.job);
+        pollSyncJob(result.job.id);
+      } catch (error) {
+        $('syncOutput').textContent = error.message;
+        $('syncNow').disabled = false;
+      }
     });
+    function pollSyncJob(jobId) {
+      if (state.syncPollTimer) {
+        clearTimeout(state.syncPollTimer);
+      }
+      state.syncPollTimer = setTimeout(async () => {
+        try {
+          const result = await api('/admin/sync/notion/jobs/' + encodeURIComponent(jobId));
+          renderSyncJob(result.job);
+          if (result.job.status === 'RUNNING') {
+            pollSyncJob(jobId);
+            return;
+          }
+          $('syncNow').disabled = false;
+          await Promise.all([loadActivityTerms(), loadCrews(), loadProjects(), loadCloudProducts(), loadBlogs()]);
+        } catch (error) {
+          $('syncOutput').textContent = error.message;
+          $('syncNow').disabled = false;
+        }
+      }, 3000);
+    }
+    function renderSyncJob(job) {
+      if (!job) {
+        $('syncOutput').textContent = '아직 실행된 동기화 작업이 없습니다.';
+        $('syncNow').disabled = false;
+        return;
+      }
+      const elapsed = Math.max(0, Math.round((Date.parse(job.finishedAt || new Date().toISOString()) - Date.parse(job.startedAt)) / 1000));
+      const lastLog = job.logs[job.logs.length - 1];
+      const stage = lastLog?.metadata?.stage || job.source;
+      const processed = lastLog?.metadata?.processed;
+      const total = lastLog?.metadata?.total;
+      const progress = Number.isInteger(processed) && Number.isInteger(total) ? processed + '/' + total : '-';
+      $('syncNow').disabled = job.status === 'RUNNING';
+      $('syncOutput').textContent = [
+        '상태: ' + job.status,
+        '현재 단계: ' + stage,
+        '진행률: ' + progress,
+        '마지막 메시지: ' + (lastLog?.message || '-'),
+        '소요 시간: ' + elapsed + '초',
+        '',
+        JSON.stringify({
+        id: job.id,
+        status: job.status,
+        startedAt: job.startedAt,
+        finishedAt: job.finishedAt,
+        elapsedSeconds: elapsed,
+        counts: {
+          total: job.totalCount,
+          created: job.createdCount,
+          updated: job.updatedCount,
+          archived: job.archivedCount,
+        },
+        errorMessage: job.errorMessage,
+        logs: job.logs,
+        }, null, 2)
+      ].join('\\n');
+    }
 
     async function loadActivityTerms() {
       setStatus('activityTermStatus', '불러오는 중...');

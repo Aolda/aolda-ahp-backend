@@ -52,8 +52,131 @@ export interface BlogPostSourceUpsertInput {
   lastSyncedAt: Date;
 }
 
+export interface SyncJobRecord {
+  id: string;
+  source: string;
+  status: string;
+  requestedBy: string | null;
+  startedAt: Date;
+  finishedAt: Date | null;
+  totalCount: number;
+  createdCount: number;
+  updatedCount: number;
+  archivedCount: number;
+  errorMessage: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  logs: Array<{
+    id: string;
+    level: string;
+    message: string;
+    metadata: Prisma.JsonValue | null;
+    createdAt: Date;
+  }>;
+}
+
 export class ContentSourceRepository {
   constructor(private readonly prisma: PrismaClient) {}
+
+  async createSyncJob(input: { source: string; requestedBy?: string | null }): Promise<SyncJobRecord> {
+    return this.prisma.syncJob.create({
+      data: {
+        source: input.source,
+        status: 'RUNNING',
+        requestedBy: input.requestedBy ?? null,
+        logs: {
+          create: {
+            level: 'INFO',
+            message: 'Sync job started',
+          },
+        },
+      },
+      include: { logs: { orderBy: { createdAt: 'asc' } } },
+    });
+  }
+
+  async getSyncJob(id: string): Promise<SyncJobRecord | null> {
+    return this.prisma.syncJob.findUnique({
+      where: { id },
+      include: { logs: { orderBy: { createdAt: 'asc' } } },
+    });
+  }
+
+  async getLatestSyncJob(source: string): Promise<SyncJobRecord | null> {
+    return this.prisma.syncJob.findFirst({
+      where: { source },
+      orderBy: { startedAt: 'desc' },
+      include: { logs: { orderBy: { createdAt: 'asc' } } },
+    });
+  }
+
+  async finishSyncJob(
+    id: string,
+    input: {
+      status: 'SUCCEEDED' | 'FAILED';
+      totalCount?: number;
+      createdCount?: number;
+      updatedCount?: number;
+      archivedCount?: number;
+      errorMessage?: string | null;
+      logMessage: string;
+      metadata?: Prisma.InputJsonValue;
+    },
+  ): Promise<SyncJobRecord> {
+    return this.prisma.syncJob.update({
+      where: { id },
+      data: {
+        status: input.status,
+        finishedAt: new Date(),
+        totalCount: input.totalCount ?? 0,
+        createdCount: input.createdCount ?? 0,
+        updatedCount: input.updatedCount ?? 0,
+        archivedCount: input.archivedCount ?? 0,
+        errorMessage: input.errorMessage ?? null,
+        logs: {
+          create: {
+            level: input.status === 'SUCCEEDED' ? 'INFO' : 'ERROR',
+            message: input.logMessage,
+            metadata: input.metadata,
+          },
+        },
+      },
+      include: { logs: { orderBy: { createdAt: 'asc' } } },
+    });
+  }
+
+  async updateSyncJobProgress(
+    id: string,
+    input: {
+      totalCount?: number;
+      createdCount?: number;
+      updatedCount?: number;
+      archivedCount?: number;
+      logLevel?: 'INFO' | 'WARN' | 'ERROR';
+      logMessage?: string;
+      metadata?: Prisma.InputJsonValue;
+    },
+  ): Promise<SyncJobRecord> {
+    return this.prisma.syncJob.update({
+      where: { id },
+      data: {
+        totalCount: input.totalCount,
+        createdCount: input.createdCount,
+        updatedCount: input.updatedCount,
+        archivedCount: input.archivedCount,
+        logs: input.logMessage
+          ? {
+              create: {
+                level: input.logLevel ?? 'INFO',
+                message: input.logMessage,
+                metadata: input.metadata,
+              },
+            }
+          : undefined,
+      },
+      include: { logs: { orderBy: { createdAt: 'asc' } } },
+    });
+  }
 
   async upsertCrewSource(input: CrewSourceUpsertInput): Promise<{ id: string; created: boolean }> {
     const existing = await this.prisma.crewSource.findUnique({
@@ -78,7 +201,7 @@ export class ContentSourceRepository {
         name: input.name,
         email: input.email,
         profileImageUrl: input.profileImageUrl,
-        notionDescription: input.notionDescription,
+        notionDescription: input.notionDescription ?? undefined,
         joinedGen: input.joinedGen,
         sourcePayload: input.sourcePayload,
         sourceArchived: false,

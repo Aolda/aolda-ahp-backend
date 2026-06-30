@@ -388,24 +388,51 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
       safeAdminWrite(reply, () => deps.adminContentService!.deleteCloudProduct(request.params.id)),
   );
 
-  app.post(
-    '/admin/sync/notion',
+  app.get(
+    '/admin/sync/notion/jobs/latest',
     {
       preHandler: createAdminAuthPreHandler(deps),
-      schema: { tags: ['admin'], summary: 'Notion 수집 데이터 수동 동기화' } as any,
+      schema: { tags: ['admin'], summary: '최근 Notion 수집 동기화 작업 조회' } as any,
     },
     async (_request, reply) => {
       if (!deps.notionContentSyncService) {
         return reply.code(503).send({ message: 'Notion content sync is not configured' });
       }
 
-      try {
-        const summary = await deps.notionContentSyncService.syncAll();
-        return { summary };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Notion content sync failed';
-        return reply.code(500).send({ message });
+      const job = await deps.notionContentSyncService.getLatestSyncJob();
+      return { job };
+    },
+  );
+
+  app.get(
+    '/admin/sync/notion/jobs/:id',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: 'Notion 수집 동기화 작업 조회' } as any,
+    },
+    async (request: FastifyRequest<{ Params: IdParams }>, reply) => {
+      if (!deps.notionContentSyncService) {
+        return reply.code(503).send({ message: 'Notion content sync is not configured' });
       }
+
+      const job = await deps.notionContentSyncService.getSyncJob(request.params.id);
+      return job ? { job } : reply.code(404).send({ message: 'Sync job not found' });
+    },
+  );
+
+  app.post(
+    '/admin/sync/notion',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: 'Notion 수집 데이터 수동 동기화' } as any,
+    },
+    async (request: AuthenticatedAdminRequest, reply) => {
+      if (!deps.notionContentSyncService) {
+        return reply.code(503).send({ message: 'Notion content sync is not configured' });
+      }
+
+      const job = await deps.notionContentSyncService.startSyncAll(request.adminUser?.id);
+      return reply.code(202).send({ job });
     },
   );
 }

@@ -17,12 +17,25 @@ export class ActivityFetcher {
   }
 
   private async fetchAllPages(): Promise<PageObjectResponse[]> {
-    // TODO: 100건 초과 시 start_cursor를 이용한 페이지네이션 처리 필요
-    const response = await this.notionClient.dataSources.query({
-      data_source_id: this.dataSourceId,
-    });
-    return response.results.filter(
-      (page): page is PageObjectResponse => page.object === 'page' && 'properties' in page,
-    );
+    const pages: PageObjectResponse[] = [];
+    let cursor: string | undefined;
+
+    do {
+      const response = await this.notionClient.dataSources.query({
+        data_source_id: this.dataSourceId,
+        start_cursor: cursor,
+        page_size: 100,
+      });
+
+      pages.push(
+        ...response.results.filter(
+          (page): page is PageObjectResponse => page.object === 'page' && 'properties' in page,
+        ),
+      );
+
+      cursor = response.next_cursor ?? undefined;
+    } while (cursor);
+
+    return pages;
   }
 }

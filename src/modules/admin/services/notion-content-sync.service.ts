@@ -1,7 +1,7 @@
 import type { Client } from '@notionhq/client';
 import type { PageObjectResponse } from '@notionhq/client/build/src/api-endpoints/common';
 
-import { ContentSourceRepository } from '../datasources/content-source.repository';
+import { ContentSourceRepository, type SyncJobRecord } from '../datasources/content-source.repository';
 import {
   extractCrewEmail,
   extractCrewName,
@@ -22,6 +22,7 @@ import { ProfileImageFileStorage } from '../../team/datasources/profile-image-fi
 
 const DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID = '355a7bac-f955-80da-b748-000b2233c7dd';
 const DEFAULT_STUDY_DATA_SOURCE_ID = '457a7bac-f955-822a-9359-0706ae009fca';
+const DEFAULT_SYNC_CONCURRENCY = 6;
 
 export interface NotionContentSyncDbIds {
   crew?: string;
@@ -51,30 +52,122 @@ export interface ProfileImageSyncSummary {
   failed: number;
 }
 
+export interface NotionContentSyncOptions {
+  syncCrewDetails?: boolean;
+  concurrency?: number;
+}
+
+type SyncProgressReporter = (event: {
+  stage: string;
+  message: string;
+  processed?: number;
+  total?: number;
+  summary?: NotionContentSyncSummary;
+}) => Promise<void>;
+
+export interface NotionContentSyncJob {
+  id: string;
+  source: string;
+  status: string;
+  requestedBy: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  totalCount: number;
+  createdCount: number;
+  updatedCount: number;
+  archivedCount: number;
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  logs: Array<{
+    id: string;
+    level: string;
+    message: string;
+    metadata: unknown;
+    createdAt: string;
+  }>;
+}
+
 export class NotionContentSyncService {
   constructor(
     private readonly notionClient: Client,
     private readonly dbIds: NotionContentSyncDbIds,
     private readonly contentSourceRepository: ContentSourceRepository,
     private readonly profileImageFileStorage?: ProfileImageFileStorage,
+    private readonly options: NotionContentSyncOptions = {},
   ) {}
 
-  async syncAll(): Promise<NotionContentSyncSummary> {
+  async syncAll(reportProgress?: SyncProgressReporter): Promise<NotionContentSyncSummary> {
+    await reportProgress?.({ stage: 'all', message: 'Starting Notion content sync' });
     const [crew, project, blog] = await Promise.all([
-      this.syncCrews(),
-      this.syncProjects(),
-      this.syncBlogs(),
+      this.syncCrews(reportProgress),
+      this.syncProjects(reportProgress),
+      this.syncBlogs(reportProgress),
     ]);
 
-    return { crew, project, blog };
+    const summary = { crew, project, blog };
+    await reportProgress?.({ stage: 'all', message: 'Finished Notion content sync', summary });
+    return summary;
   }
 
-  async syncCrews(): Promise<SyncEntitySummary> {
+  async startSyncAll(requestedBy?: string | null): Promise<NotionContentSyncJob> {
+    const job = await this.contentSourceRepository.createSyncJob({
+      source: 'notion',
+      requestedBy,
+    });
+
+    setImmediate(() => {
+      void this.runSyncAllJob(job.id);
+    });
+
+    return this.toJob(job);
+  }
+
+  async getSyncJob(id: string): Promise<NotionContentSyncJob | null> {
+    const job = await this.contentSourceRepository.getSyncJob(id);
+    return job ? this.toJob(job) : null;
+  }
+
+  async getLatestSyncJob(): Promise<NotionContentSyncJob | null> {
+    const job = await this.contentSourceRepository.getLatestSyncJob('notion');
+    return job ? this.toJob(job) : null;
+  }
+
+  private async runSyncAllJob(jobId: string): Promise<void> {
+    try {
+      const summary = await this.syncAll(async (event) => {
+        const totals = event.summary ? this.totalSummary(event.summary) : undefined;
+        await this.contentSourceRepository.updateSyncJobProgress(jobId, {
+          ...totals,
+          logMessage: event.message,
+          metadata: this.progressMetadata(event),
+        });
+      });
+      const totals = this.totalSummary(summary);
+      await this.contentSourceRepository.finishSyncJob(jobId, {
+        status: 'SUCCEEDED',
+        ...totals,
+        logMessage: 'Sync job succeeded',
+        metadata: summary as never,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Notion content sync failed';
+      await this.contentSourceRepository.finishSyncJob(jobId, {
+        status: 'FAILED',
+        errorMessage: message,
+        logMessage: message,
+      });
+    }
+  }
+
+  async syncCrews(reportProgress?: SyncProgressReporter): Promise<SyncEntitySummary> {
     const summary = this.emptySummary();
     if (!this.dbIds.crew) {
+      await reportProgress?.({ stage: 'crew', message: 'Crew sync skipped: data source is not configured' });
       return { ...summary, skipped: 1 };
     }
 
+    await reportProgress?.({ stage: 'crew', message: 'Fetching crew pages from Notion' });
     const crewFetcher = new CrewFetcher(this.notionClient, this.dbIds.crew);
     const generationMappingFetcher = new CrewGenerationMappingFetcher(
       this.notionClient,
@@ -84,6 +177,12 @@ export class NotionContentSyncService {
       crewFetcher.fetchPages(),
       this.fetchActivityTermGenerationMap(generationMappingFetcher),
     ]);
+    await reportProgress?.({
+      stage: 'crew',
+      message: `Processing ${crewPages.length} crew pages`,
+      processed: 0,
+      total: crewPages.length,
+    });
     const syncedAt = new Date();
     const profileImages: ProfileImageSyncSummary = {
       found: 0,
@@ -91,15 +190,19 @@ export class NotionContentSyncService {
       failed: 0,
     };
 
-    for (const page of crewPages) {
+    let processed = 0;
+    await this.mapWithConcurrency(crewPages, this.syncConcurrency(), async (page) => {
       const profileAccountIds = extractProfileAccountIds(page);
       const generations = extractGenerationNumbers(page);
-      const detailSource = await crewFetcher.fetchDetailSource(page);
+      const pageSource = await crewFetcher.fetchPageSource(page);
+      const notionDescription = this.options.syncCrewDetails
+        ? (await crewFetcher.fetchDetailSource(page, pageSource.profileImageUrl)).description
+        : null;
       const profileImage = await this.resolveProfileImageUrl(
         page.id,
-        detailSource.profileImageUrl,
+        pageSource.profileImageUrl,
       );
-      if (detailSource.profileImageUrl) {
+      if (pageSource.profileImageUrl) {
         profileImages.found += 1;
       }
       if (profileImage.downloaded) {
@@ -115,7 +218,7 @@ export class NotionContentSyncService {
         name: extractCrewName(page),
         email: this.extractCrewEmailOrNull(page),
         profileImageUrl: profileImage.url,
-        notionDescription: detailSource.description,
+        notionDescription,
         joinedGen: generations[0] ?? null,
         sourcePayload: page as never,
         lastSyncedAt: syncedAt,
@@ -142,9 +245,25 @@ export class NotionContentSyncService {
           lastSyncedAt: syncedAt,
         });
       }
-    }
+
+      processed += 1;
+      if (processed % 10 === 0 || processed === crewPages.length) {
+        await reportProgress?.({
+          stage: 'crew',
+          message: `Processed ${processed}/${crewPages.length} crew pages`,
+          processed,
+          total: crewPages.length,
+        });
+      }
+    });
 
     summary.profileImages = profileImages;
+    await reportProgress?.({
+      stage: 'crew',
+      message: `Crew sync completed: ${summary.total} total, ${summary.created} created, ${summary.updated} updated`,
+      processed: summary.total,
+      total: crewPages.length,
+    });
     return summary;
   }
 
@@ -167,13 +286,15 @@ export class NotionContentSyncService {
     }
   }
 
-  async syncProjects(): Promise<SyncEntitySummary> {
+  async syncProjects(reportProgress?: SyncProgressReporter): Promise<SyncEntitySummary> {
     const summary = this.emptySummary();
     const projectDataSourceId = this.dbIds.project ?? this.dbIds.activity;
     if (!projectDataSourceId) {
+      await reportProgress?.({ stage: 'project', message: 'Project sync skipped: data source is not configured' });
       return { ...summary, skipped: 1 };
     }
 
+    await reportProgress?.({ stage: 'project', message: 'Fetching project pages from Notion' });
     const projectFetcher = new ActivityFetcher(this.notionClient, projectDataSourceId);
     const studyFetcher = this.dbIds.study
       ? new ActivityFetcher(this.notionClient, this.dbIds.study)
@@ -182,12 +303,29 @@ export class NotionContentSyncService {
       projectFetcher.fetchPages(),
       studyFetcher.fetchPages().catch(() => []),
     ]);
+    const pages = [...projectPages, ...studyPages];
+    await reportProgress?.({
+      stage: 'project',
+      message: `Processing ${pages.length} project/study pages`,
+      processed: 0,
+      total: pages.length,
+    });
     const syncedAt = new Date();
 
-    for (const page of [...projectPages, ...studyPages]) {
+    let processed = 0;
+    await this.mapWithConcurrency(pages, this.syncConcurrency(), async (page) => {
       const parsed = parseActivityPage(page);
       if (parsed.activityType !== 'ACTIVITY_TYPE/PROJECT') {
-        continue;
+        processed += 1;
+        if (processed % 10 === 0 || processed === pages.length) {
+          await reportProgress?.({
+            stage: 'project',
+            message: `Processed ${processed}/${pages.length} project/study pages`,
+            processed,
+            total: pages.length,
+          });
+        }
+        return;
       }
 
       const seeded = parseActivityMetadataSeed(page, parsed.activityType);
@@ -212,22 +350,47 @@ export class NotionContentSyncService {
       } else {
         summary.updated += 1;
       }
-    }
 
+      processed += 1;
+      if (processed % 10 === 0 || processed === pages.length) {
+        await reportProgress?.({
+          stage: 'project',
+          message: `Processed ${processed}/${pages.length} project/study pages`,
+          processed,
+          total: pages.length,
+        });
+      }
+    });
+
+    await reportProgress?.({
+      stage: 'project',
+      message: `Project sync completed: ${summary.total} total, ${summary.created} created, ${summary.updated} updated`,
+      processed: processed,
+      total: pages.length,
+    });
     return summary;
   }
 
-  async syncBlogs(): Promise<SyncEntitySummary> {
+  async syncBlogs(reportProgress?: SyncProgressReporter): Promise<SyncEntitySummary> {
     const summary = this.emptySummary();
     if (!this.dbIds.blog) {
+      await reportProgress?.({ stage: 'blog', message: 'Blog sync skipped: data source is not configured' });
       return { ...summary, skipped: 1 };
     }
 
+    await reportProgress?.({ stage: 'blog', message: 'Fetching blog pages from Notion' });
     const blogPostFetcher = new BlogPostFetcher(this.notionClient, this.dbIds.blog);
     const pages = await blogPostFetcher.fetchPages();
+    await reportProgress?.({
+      stage: 'blog',
+      message: `Processing ${pages.length} blog pages`,
+      processed: 0,
+      total: pages.length,
+    });
     const syncedAt = new Date();
 
-    for (const page of pages) {
+    let processed = 0;
+    await this.mapWithConcurrency(pages, this.syncConcurrency(), async (page) => {
       const parsed = parseBlogPostPage(page);
       const created = await this.contentSourceRepository.upsertBlogPostSource({
         notionPageId: page.id,
@@ -248,8 +411,24 @@ export class NotionContentSyncService {
       } else {
         summary.updated += 1;
       }
-    }
 
+      processed += 1;
+      if (processed % 25 === 0 || processed === pages.length) {
+        await reportProgress?.({
+          stage: 'blog',
+          message: `Processed ${processed}/${pages.length} blog pages`,
+          processed,
+          total: pages.length,
+        });
+      }
+    });
+
+    await reportProgress?.({
+      stage: 'blog',
+      message: `Blog sync completed: ${summary.total} total, ${summary.created} created, ${summary.updated} updated`,
+      processed: summary.total,
+      total: pages.length,
+    });
     return summary;
   }
 
@@ -307,6 +486,79 @@ export class NotionContentSyncService {
       created: 0,
       updated: 0,
       skipped: 0,
+    };
+  }
+
+  private syncConcurrency(): number {
+    return Math.max(1, this.options.concurrency ?? DEFAULT_SYNC_CONCURRENCY);
+  }
+
+  private async mapWithConcurrency<T>(
+    items: T[],
+    concurrency: number,
+    run: (item: T, index: number) => Promise<void>,
+  ): Promise<void> {
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        await run(items[index], index);
+      }
+    });
+
+    await Promise.all(workers);
+  }
+
+  private totalSummary(summary: NotionContentSyncSummary): {
+    totalCount: number;
+    createdCount: number;
+    updatedCount: number;
+    archivedCount: number;
+  } {
+    const entities = [summary.crew, summary.project, summary.blog];
+    return {
+      totalCount: entities.reduce((total, item) => total + item.total, 0),
+      createdCount: entities.reduce((total, item) => total + item.created, 0),
+      updatedCount: entities.reduce((total, item) => total + item.updated, 0),
+      archivedCount: 0,
+    };
+  }
+
+  private toJob(job: SyncJobRecord): NotionContentSyncJob {
+    return {
+      id: job.id,
+      source: job.source,
+      status: job.status,
+      requestedBy: job.requestedBy,
+      startedAt: job.startedAt.toISOString(),
+      finishedAt: job.finishedAt?.toISOString() ?? null,
+      totalCount: job.totalCount,
+      createdCount: job.createdCount,
+      updatedCount: job.updatedCount,
+      archivedCount: job.archivedCount,
+      errorMessage: job.errorMessage,
+      createdAt: job.createdAt.toISOString(),
+      updatedAt: job.updatedAt.toISOString(),
+      logs: job.logs.map((log) => ({
+        id: log.id,
+        level: log.level,
+        message: log.message,
+        metadata: log.metadata,
+        createdAt: log.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  private progressMetadata(event: {
+    stage: string;
+    processed?: number;
+    total?: number;
+  }): Record<string, string | number> {
+    return {
+      stage: event.stage,
+      ...(event.processed === undefined ? {} : { processed: event.processed }),
+      ...(event.total === undefined ? {} : { total: event.total }),
     };
   }
 }
