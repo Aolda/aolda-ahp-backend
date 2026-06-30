@@ -392,12 +392,13 @@ export class NotionContentSyncService {
     let processed = 0;
     await this.mapWithConcurrency(pages, this.syncConcurrency(), async (page) => {
       const parsed = parseBlogPostPage(page);
+      const contentPreview = await blogPostFetcher.fetchMarkdownContent(page.id);
       const created = await this.contentSourceRepository.upsertBlogPostSource({
         notionPageId: page.id,
         title: parsed.title,
         url: parsed.url,
         projectName: parsed.projectName,
-        contentPreview: null,
+        contentPreview,
         recordedAt: parsed.recordedAt,
         participantRefs: parsed.participantRefs,
         projectRefs: parsed.projectName ? [parsed.projectName] : [],

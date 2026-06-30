@@ -33,8 +33,8 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       --ring: #38bdf8;
       --radius: 18px;
       --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
-      --glass: rgba(255, 255, 255, 0.64);
-      --glass-strong: rgba(255, 255, 255, 0.78);
+      --glass: rgba(255, 255, 255, 0.46);
+      --glass-strong: rgba(255, 255, 255, 0.62);
       --glass-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
       --ease-snap: cubic-bezier(0, 1, 1, 1);
     }
@@ -98,6 +98,8 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       grid-template-columns: 72px minmax(0, 1fr);
     }
     nav {
+      display: flex;
+      flex-direction: column;
       margin: .5rem;
       border-radius: .75rem;
       padding: 12px;
@@ -152,17 +154,33 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       place-items: center;
       aspect-ratio: 1 / 1;
       width: 38px;
-      margin: 2px auto 12px;
+      margin: 0;
       border-radius: .75rem;
       background: rgba(255, 255, 255, 0.56);
       box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
       transition: all 220ms var(--ease-snap);
+    }
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    main.sidebar-collapsed .nav-brand {
+      justify-content: center;
     }
     main:not(.sidebar-collapsed) .nav-logo {
       width: 38px;
     }
     .nav-toggle {
       margin-bottom: 14px;
+    }
+    .nav-spacer {
+      flex: 1 1 auto;
+      min-height: 12px;
+    }
+    .nav-logout {
+      margin-top: auto;
     }
     .nav-logo-svg {
       display: block;
@@ -221,6 +239,26 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       background: var(--glass-strong);
       backdrop-filter: blur(18px) saturate(125%);
       box-shadow: var(--glass-shadow);
+    }
+    nav .session-card {
+      min-height: 38px;
+      flex: 1;
+      margin: 0;
+      padding: 0 8px;
+      justify-content: flex-start;
+      overflow: hidden;
+    }
+    nav .session-card #session {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    main.sidebar-collapsed nav .session-card {
+      display: none;
+    }
+    main.sidebar-collapsed nav .session-card #session {
+      display: none;
     }
     .page-head {
       display: flex;
@@ -337,6 +375,114 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       gap: 10px;
       margin-bottom: 10px;
       align-items: center;
+    }
+    .team-combobox {
+      position: relative;
+    }
+    .team-menu {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      z-index: 6;
+      display: grid;
+      gap: 4px;
+      max-height: 220px;
+      overflow: auto;
+      padding: 6px;
+      border-radius: .75rem;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+      backdrop-filter: blur(18px) saturate(125%);
+    }
+    .team-menu button {
+      min-height: 32px;
+      border: 0;
+      border-radius: 10px;
+      justify-content: flex-start;
+      text-align: left;
+      background: transparent;
+      padding: 0 10px;
+      font-weight: 650;
+    }
+    .team-menu button:hover {
+      background: var(--muted);
+    }
+    .toast-root {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 30;
+      display: grid;
+      gap: 10px;
+      width: min(360px, calc(100vw - 36px));
+      pointer-events: none;
+    }
+    .toast {
+      padding: 14px 16px;
+      border-radius: .75rem;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--foreground);
+      box-shadow: 0 14px 36px rgba(15, 23, 42, 0.14);
+      backdrop-filter: blur(18px) saturate(125%);
+      opacity: 0;
+      transform: translateY(10px);
+      animation: toast-in 180ms var(--ease-snap) forwards;
+    }
+    .toast.success {
+      box-shadow: 0 14px 36px rgba(14, 118, 196, 0.14);
+    }
+    .toast.danger {
+      box-shadow: 0 14px 36px rgba(220, 38, 38, 0.14);
+    }
+    .toast-title {
+      font-weight: 850;
+    }
+    .toast-message {
+      margin-top: 4px;
+      color: var(--muted-foreground);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .markdown-preview {
+      margin-top: 12px;
+      padding: 16px;
+      border-radius: .75rem;
+      background: rgba(255, 255, 255, 0.62);
+      box-shadow: 0 5px 16px rgba(15, 23, 42, 0.04);
+      backdrop-filter: blur(14px) saturate(125%);
+      line-height: 1.65;
+    }
+    .markdown-preview h1,
+    .markdown-preview h2,
+    .markdown-preview h3 {
+      margin: 18px 0 8px;
+    }
+    .markdown-preview h1:first-child,
+    .markdown-preview h2:first-child,
+    .markdown-preview h3:first-child {
+      margin-top: 0;
+    }
+    .markdown-preview p {
+      margin: 8px 0;
+      color: var(--foreground);
+    }
+    .markdown-preview ul,
+    .markdown-preview ol {
+      margin: 8px 0;
+      padding-left: 22px;
+    }
+    .markdown-preview blockquote {
+      margin: 10px 0;
+      padding-left: 12px;
+      border-left: 3px solid rgba(14, 118, 196, 0.35);
+      color: var(--muted-foreground);
+    }
+    @keyframes toast-in {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
     .term-card {
       display: grid;
@@ -464,6 +610,11 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         gap: 8px;
       }
       .nav-logo { display: none; }
+      .nav-brand { grid-column: 1 / -1; }
+      nav .session-card { width: auto; }
+      main.sidebar-collapsed nav .session-card #session { display: inline; }
+      .nav-spacer { display: none; }
+      .nav-logout { margin-top: 0; }
       .nav-toggle { grid-column: 1 / -1; }
       nav button { margin-bottom: 0; }
       main.sidebar-collapsed nav button .nav-label { display: inline; }
@@ -502,6 +653,9 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     <symbol id="icon-notebook" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
       <path d="M6 4h11a2 2 0 0 1 2 2v14H8a3 3 0 0 1 -3 -3V5a1 1 0 0 1 1 -1"></path><path d="M8 4v17"></path><path d="M10 8h5"></path><path d="M10 12h5"></path>
     </symbol>
+    <symbol id="icon-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 8V6a2 2 0 0 0 -2 -2H5a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2"></path><path d="M9 12h12"></path><path d="M18 9l3 3l-3 3"></path>
+    </symbol>
   </svg>
   <div id="loginView" class="login">
     <h2>관리콘솔 로그인</h2>
@@ -519,31 +673,36 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
 
   <main id="appView" class="hidden">
     <nav>
-      <div class="nav-logo" aria-label="Aolda 로고">
-        <svg class="nav-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" role="img" aria-label="Aolda">
-          <defs>
-            <linearGradient id="aolda-logo-linear-gradient" x1="19.1" y1="6.1" x2="3.3" y2="20.1" gradientTransform="translate(0 24) scale(1 -1)" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#206ca5"></stop>
-              <stop offset="1" stop-color="#0e76c4"></stop>
-            </linearGradient>
-            <mask id="aolda-logo-mask" x="-6.3" y=".2" width="31.7" height="27.4" maskUnits="userSpaceOnUse">
-              <circle fill="#d9d9d9" cx="11.1" cy="10.8" r="10.6"></circle>
-            </mask>
-            <linearGradient id="aolda-logo-linear-gradient1" x1="-177.8" y1="-82.4" x2="-180.6" y2="-93.1" gradientTransform="translate(182.7 -70.2) scale(1 -1)" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#58aee5"></stop>
-              <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
-            </linearGradient>
-            <linearGradient id="aolda-logo-linear-gradient2" x1="9.7" y1="11" x2="20" y2="-3.1" gradientTransform="translate(0 24) scale(1 -1)" gradientUnits="userSpaceOnUse">
-              <stop offset="0" stop-color="#a7d7f0"></stop>
-              <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
-            </linearGradient>
-          </defs>
-          <circle fill="url(#aolda-logo-linear-gradient)" cx="11.1" cy="10.8" r="10.6"></circle>
-          <g mask="url(#aolda-logo-mask)">
-            <ellipse fill="url(#aolda-logo-linear-gradient1)" cx="3.5" cy="17.8" rx="10.6" ry="7.6" transform="translate(-9.7 5.3) rotate(-35.5)"></ellipse>
-            <ellipse fill="url(#aolda-logo-linear-gradient2)" cx="14.8" cy="20" rx="10.6" ry="7.6"></ellipse>
-          </g>
-        </svg>
+      <div class="nav-brand">
+        <div class="nav-logo" aria-label="Aolda 로고">
+          <svg class="nav-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" role="img" aria-label="Aolda">
+            <defs>
+              <linearGradient id="aolda-logo-linear-gradient" x1="19.1" y1="6.1" x2="3.3" y2="20.1" gradientTransform="translate(0 24) scale(1 -1)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#206ca5"></stop>
+                <stop offset="1" stop-color="#0e76c4"></stop>
+              </linearGradient>
+              <mask id="aolda-logo-mask" x="-6.3" y=".2" width="31.7" height="27.4" maskUnits="userSpaceOnUse">
+                <circle fill="#d9d9d9" cx="11.1" cy="10.8" r="10.6"></circle>
+              </mask>
+              <linearGradient id="aolda-logo-linear-gradient1" x1="-177.8" y1="-82.4" x2="-180.6" y2="-93.1" gradientTransform="translate(182.7 -70.2) scale(1 -1)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#58aee5"></stop>
+                <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
+              </linearGradient>
+              <linearGradient id="aolda-logo-linear-gradient2" x1="9.7" y1="11" x2="20" y2="-3.1" gradientTransform="translate(0 24) scale(1 -1)" gradientUnits="userSpaceOnUse">
+                <stop offset="0" stop-color="#a7d7f0"></stop>
+                <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
+              </linearGradient>
+            </defs>
+            <circle fill="url(#aolda-logo-linear-gradient)" cx="11.1" cy="10.8" r="10.6"></circle>
+            <g mask="url(#aolda-logo-mask)">
+              <ellipse fill="url(#aolda-logo-linear-gradient1)" cx="3.5" cy="17.8" rx="10.6" ry="7.6" transform="translate(-9.7 5.3) rotate(-35.5)"></ellipse>
+              <ellipse fill="url(#aolda-logo-linear-gradient2)" cx="14.8" cy="20" rx="10.6" ry="7.6"></ellipse>
+            </g>
+          </svg>
+        </div>
+        <div class="toolbar session-card">
+          <span id="session" class="muted"></span>
+        </div>
       </div>
       <button id="sidebarToggle" class="nav-toggle" type="button" title="사이드바 접기">
         <svg class="icon"><use href="#icon-panel-left"></use></svg><span class="nav-label">메뉴 접기</span>
@@ -566,14 +725,12 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       <button class="nav-item" data-tab="blogs" data-loader="loadBlogs" title="블로그 관리">
         <svg class="icon"><use href="#icon-notebook"></use></svg><span class="nav-label">블로그 관리</span>
       </button>
+      <div class="nav-spacer"></div>
+      <button id="logout" class="nav-logout hidden" type="button" title="로그아웃">
+        <svg class="icon"><use href="#icon-logout"></use></svg><span class="nav-label">로그아웃</span>
+      </button>
     </nav>
     <section>
-      <header>
-        <div class="toolbar session-card">
-          <span id="session" class="muted"></span>
-          <button id="logout" class="ghost hidden">로그아웃</button>
-        </div>
-      </header>
       <div id="sync" class="tab">
         <div class="page-head">
           <div>
@@ -674,8 +831,17 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
             <div class="page-subtitle">Notion에서 수집된 블로그 원천 목록입니다.</div>
           </div>
           <div class="toolbar">
+            <button id="blogAiManage">AI관리</button>
             <input id="blogSearch" style="width:280px" placeholder="블로그 제목, 프로젝트명, 크루명 검색" />
             <button id="refreshBlogs">새로고침</button>
+          </div>
+        </div>
+        <div id="blogAiPanel" class="card hidden" style="margin-bottom:18px">
+          <div class="content">
+            <h3>AI관리</h3>
+            <label>기본 블로깅 프롬프트</label>
+            <textarea id="blogDefaultPrompt"></textarea>
+            <div class="toolbar"><button id="saveBlogAiConfig" class="primary">AI 설정 저장</button><span id="blogAiStatus" class="status"></span></div>
           </div>
         </div>
         <div class="grid">
@@ -723,6 +889,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       </div>
     </section>
   </main>
+  <div id="toastRoot" class="toast-root" aria-live="polite"></div>
 
   <script>
     const state = {
@@ -732,6 +899,8 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       projects: [],
       cloudProducts: [],
       blogs: [],
+      blogAiConfig: null,
+      blogPublishStates: {},
       syncPollTimer: null,
       sidebarCollapsed: localStorage.getItem('adminSidebarCollapsed') === 'true',
     };
@@ -741,6 +910,17 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       const el = $(id);
       el.textContent = value || '';
       el.className = danger ? 'status danger' : 'status';
+    }
+    function notify(title, message = '', type = 'success') {
+      const toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+      toast.innerHTML = '<div class="toast-title">' + esc(title) + '</div>' + (message ? '<div class="toast-message">' + esc(message) + '</div>' : '');
+      $('toastRoot').appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px)';
+        setTimeout(() => toast.remove(), 220);
+      }, 3200);
     }
     function authHeaders() {
       return { authorization: 'Bearer ' + state.token };
@@ -811,6 +991,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       localStorage.removeItem('adminToken');
       state.token = '';
       showLogin();
+      notify('로그아웃 완료', '관리자 세션이 종료되었습니다.');
     });
     $('sidebarToggle').addEventListener('click', () => {
       state.sidebarCollapsed = !state.sidebarCollapsed;
@@ -869,6 +1050,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
             return;
           }
           $('syncNow').disabled = false;
+          notify(result.job.status === 'SUCCEEDED' ? '동기화 완료' : '동기화 실패', syncStatusText(result.job.status), result.job.status === 'SUCCEEDED' ? 'success' : 'danger');
           await Promise.all([loadActivityTerms(), loadCrews(), loadProjects(), loadCloudProducts(), loadBlogs()]);
         } catch (error) {
           renderSyncError(error.message);
@@ -1017,16 +1199,20 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         + '<div class="toolbar"><button id="saveCrewBlogs" class="primary">블로그 공개 저장</button></div>';
       $('saveCrew').onclick = async () => {
         await api('/admin/crews/' + id, { method: 'PATCH', body: JSON.stringify({ isVisible: $('crewVisible').checked, description: $('crewDescription').value }) });
+        notify('크루 프로필 저장 완료', crew.name);
         await loadCrews();
       };
       $('addCrewTerm').onclick = () => {
         $('crewTermTeams').insertAdjacentHTML('beforeend', termTeamRowHtml({ generation: '', activityTerm: '', teamName: '' }));
+        bindTeamComboboxes();
       };
+      bindTeamComboboxes();
       $('saveCrewTerms').onclick = async () => {
         await api('/admin/crews/' + id + '/term-teams', {
           method: 'PUT',
           body: JSON.stringify({ items: collectCrewTermTeams() }),
         });
+        notify('기수별 팀 저장 완료', crew.name);
         await showCrew(id);
       };
       $('saveCrewProjects').onclick = async () => {
@@ -1034,6 +1220,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           method: 'PUT',
           body: JSON.stringify({ projects: collectCheckedItemsIn('crewProjects', 'crewProject', 'projectSourceId') }),
         });
+        notify('프로젝트 공개 설정 저장 완료', crew.name);
         await showCrew(id);
       };
       $('saveCrewBlogs').onclick = async () => {
@@ -1041,6 +1228,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           method: 'PUT',
           body: JSON.stringify({ blogs: collectCheckedItemsIn('crewBlogs', 'crewBlog', 'blogPostSourceId') }),
         });
+        notify('블로그 공개 설정 저장 완료', crew.name);
         await showCrew(id);
       };
     }
@@ -1094,6 +1282,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           titleBriefOverride: emptyToNull($('projectBrief').value),
           description: $('projectDescription').value,
         }) });
+        notify('프로젝트 정보 저장 완료', project.titleKo);
         await loadProjects();
       };
       $('addProjectPeriod').onclick = () => {
@@ -1104,6 +1293,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           method: 'PUT',
           body: JSON.stringify({ periods: collectProjectPeriods() }),
         });
+        notify('진행기간 저장 완료', project.titleKo);
         await showProject(id);
       };
       $('saveProjectParticipants').onclick = async () => {
@@ -1111,6 +1301,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           method: 'PUT',
           body: JSON.stringify({ participants: collectCheckedItemsIn('projectParticipants', 'projectParticipant', 'crewSourceId') }),
         });
+        notify('참여자 저장 완료', project.titleKo);
         await loadProjects();
         await showProject(id);
       };
@@ -1119,6 +1310,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           method: 'PUT',
           body: JSON.stringify({ blogs: collectCheckedItemsIn('projectBlogs', 'projectBlog', 'blogPostSourceId').filter((item) => item.isVisible).map(({ blogPostSourceId }, index) => ({ blogPostSourceId, sortOrder: index })) }),
         });
+        notify('대표 블로그 저장 완료', project.titleKo);
         await showProject(id);
       };
     }
@@ -1174,6 +1366,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         const payload = collectCloudProductPayload();
         const path = isNew ? '/admin/cloud-products' : '/admin/cloud-products/' + id;
         await api(path, { method: isNew ? 'POST' : 'PUT', body: JSON.stringify(payload) });
+        notify(isNew ? '제품 등록 완료' : '제품 저장 완료', payload.productName);
         await loadCloudProducts();
         $('cloudProductDetail').innerHTML = emptyHtml(isNew ? '제품이 등록되었습니다.' : '제품이 저장되었습니다.');
       };
@@ -1181,6 +1374,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         $('deleteCloudProduct').onclick = async () => {
           if (!confirm('이 제품을 삭제할까요?')) return;
           await api('/admin/cloud-products/' + id, { method: 'DELETE' });
+          notify('제품 삭제 완료', product.productName);
           await loadCloudProducts();
           $('cloudProductDetail').innerHTML = emptyHtml('제품이 삭제되었습니다.');
         };
@@ -1202,6 +1396,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       setStatus('blogStatus', '불러오는 중...');
       try {
         state.blogs = (await api('/admin/blogs')).data;
+        await ensureBlogAiConfig();
         await Promise.all([ensureCrewsData(), ensureProjectsData()]);
         renderBlogList();
       } catch (error) {
@@ -1216,16 +1411,171 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       $('blogList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showBlog(button.dataset.id)));
       setStatus('blogStatus', blogs.length + '개');
     }
-    function showBlog(id) {
+    async function showBlog(id) {
       const blog = state.blogs.find((item) => item.id === id);
       if (!blog) {
         $('blogDetail').innerHTML = emptyHtml('블로그를 찾을 수 없습니다.');
         return;
       }
+      await ensureBlogAiConfig();
+      const publishState = await loadBlogPublishState(id);
 
       $('blogDetail').innerHTML = '<h2>' + esc(blog.title) + '</h2>'
         + '<div class="meta" style="margin-top:8px">' + esc(blogMeta(blog)) + '</div>'
-        + '<div class="content meta" style="padding-left:0">추가 관리 항목은 추후 제공 예정입니다.</div>';
+        + blogPublishSectionHtml(blog, publishState)
+        + blogBodySectionHtml(blog);
+      bindBlogPublishControls(blog);
+    }
+
+    async function ensureBlogAiConfig() {
+      if (state.blogAiConfig) return state.blogAiConfig;
+      state.blogAiConfig = (await api('/admin/blogs/ai-config')).data;
+      $('blogDefaultPrompt').value = state.blogAiConfig.defaultPrompt || '';
+      return state.blogAiConfig;
+    }
+    async function toggleBlogAiPanel() {
+      await ensureBlogAiConfig();
+      $('blogAiPanel').classList.toggle('hidden');
+    }
+    async function saveBlogAiConfig() {
+      setStatus('blogAiStatus', '저장 중...');
+      try {
+        const result = await api('/admin/blogs/ai-config', {
+          method: 'PUT',
+          body: JSON.stringify({ defaultPrompt: $('blogDefaultPrompt').value }),
+        });
+        state.blogAiConfig = result.data;
+        setStatus('blogAiStatus', '저장됨');
+        notify('AI 설정 저장 완료', '기본 블로깅 프롬프트가 변경되었습니다.');
+      } catch (error) {
+        setStatus('blogAiStatus', error.message, true);
+      }
+    }
+    async function loadBlogPublishState(blogId) {
+      const stateResult = (await api('/admin/blogs/' + blogId + '/publish-state')).data;
+      state.blogPublishStates[blogId] = stateResult;
+      return stateResult;
+    }
+    function blogPublishSectionHtml(blog, publishState) {
+      return '<div class="content" style="padding-left:0">'
+        + '<h3>공개게시</h3>'
+        + '<div class="meta">AI 기반 초안을 생성한 뒤 blog.aoldacloud.com 공개 게시를 목업으로 관리합니다.</div>'
+        + '<div class="toolbar" style="margin-top:12px">'
+        + '<button id="showBlogDraftPrompt" class="primary">블로깅 초안 자동생성</button>'
+        + '<label class="inline" style="' + (publishState.isPublished ? '' : 'opacity:.45') + '"><input id="blogPublishVisible" type="checkbox" ' + (publishState.isVisible ? 'checked' : '') + ' ' + (publishState.isPublished ? '' : 'disabled') + '> 게시 토글</label>'
+        + '<span class="badge ' + (publishState.isPublished ? 'public' : 'private') + '">' + (publishState.isPublished ? '게시됨' : '미게시') + '</span>'
+        + '</div>'
+        + '<div id="blogDraftPromptPanel" class="hidden" style="margin-top:12px">'
+        + '<label>기본 블로깅 프롬프트</label><textarea readonly>' + esc(state.blogAiConfig?.defaultPrompt || '') + '</textarea>'
+        + '<label>커스텀 프롬프트</label><textarea id="blogCustomPrompt" placeholder="이번 초안에 추가로 반영할 내용을 입력하세요."></textarea>'
+        + '<div class="toolbar"><button id="generateBlogDraft" class="primary">생성</button><span id="blogDraftStatus" class="status"></span></div>'
+        + '</div>'
+        + '<div id="blogDraftEditor" class="' + (publishState.draft ? '' : 'hidden') + '" style="margin-top:12px">'
+        + '<label>공개 초안</label><textarea id="blogDraftContent">' + esc(publishState.draft || '') + '</textarea>'
+        + '<div class="toolbar"><button id="regenerateBlogDraft">재생성</button><button id="hideBlogDraftEditor">뒤로가기</button><button id="publishBlogDraft" class="primary">게시</button><span id="blogPublishStatus" class="status"></span></div>'
+        + '</div>'
+        + '</div>';
+    }
+    function blogBodySectionHtml(blog) {
+      return '<div class="content" style="padding-left:0">'
+        + '<h3>블로깅 본문</h3>'
+        + '<div class="meta">Notion에서 동기화된 원문을 Markdown 렌더링 형태로 확인합니다.</div>'
+        + '<div class="markdown-preview">' + renderMarkdownPreview(blog.contentPreview || '') + '</div>'
+        + '</div>';
+    }
+    function renderMarkdownPreview(markdown) {
+      if (!markdown.trim()) {
+        return '<p class="meta">동기화된 본문이 없습니다. Notion 동기화를 다시 실행하면 본문이 채워집니다.</p>';
+      }
+      const lines = markdown.split(/\r?\n/);
+      let html = '';
+      let listType = '';
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line) {
+          html += closeMarkdownList(listType);
+          listType = '';
+          continue;
+        }
+        const bullet = line.match(/^[-*]\s+(.+)$/);
+        const numbered = line.match(/^\d+\.\s+(.+)$/);
+        if (bullet || numbered) {
+          const nextType = bullet ? 'ul' : 'ol';
+          if (listType !== nextType) {
+            html += closeMarkdownList(listType) + '<' + nextType + '>';
+            listType = nextType;
+          }
+          html += '<li>' + esc((bullet || numbered)[1]) + '</li>';
+          continue;
+        }
+        html += closeMarkdownList(listType);
+        listType = '';
+        if (line.startsWith('### ')) html += '<h3>' + esc(line.slice(4)) + '</h3>';
+        else if (line.startsWith('## ')) html += '<h2>' + esc(line.slice(3)) + '</h2>';
+        else if (line.startsWith('# ')) html += '<h1>' + esc(line.slice(2)) + '</h1>';
+        else if (line.startsWith('> ')) html += '<blockquote>' + esc(line.slice(2)) + '</blockquote>';
+        else html += '<p>' + esc(line) + '</p>';
+      }
+      html += closeMarkdownList(listType);
+      return html;
+    }
+    function closeMarkdownList(listType) {
+      return listType ? '</' + listType + '>' : '';
+    }
+    function bindBlogPublishControls(blog) {
+      $('showBlogDraftPrompt').onclick = () => {
+        $('blogDraftPromptPanel').classList.remove('hidden');
+      };
+      if ($('hideBlogDraftEditor')) {
+        $('hideBlogDraftEditor').onclick = () => {
+          $('blogDraftEditor').classList.add('hidden');
+          $('blogDraftPromptPanel').classList.remove('hidden');
+        };
+      }
+      if ($('regenerateBlogDraft')) {
+        $('regenerateBlogDraft').onclick = () => {
+          $('blogDraftPromptPanel').classList.remove('hidden');
+          $('blogDraftEditor').classList.add('hidden');
+        };
+      }
+      $('generateBlogDraft').onclick = async () => {
+        setStatus('blogDraftStatus', '생성 중...');
+        try {
+          const result = await api('/admin/blogs/' + blog.id + '/draft', {
+            method: 'POST',
+            body: JSON.stringify({ customPrompt: $('blogCustomPrompt').value }),
+          });
+          state.blogPublishStates[blog.id] = result.data;
+          $('blogDraftPromptPanel').classList.add('hidden');
+          $('blogDraftEditor').classList.remove('hidden');
+          $('blogDraftContent').value = result.data.draft || '';
+          setStatus('blogDraftStatus', '');
+          notify('초안 생성 완료', blog.title);
+        } catch (error) {
+          setStatus('blogDraftStatus', error.message, true);
+        }
+      };
+      $('publishBlogDraft').onclick = async () => {
+        setStatus('blogPublishStatus', '게시 중...');
+        try {
+          const result = await api('/admin/blogs/' + blog.id + '/publish', {
+            method: 'POST',
+            body: JSON.stringify({ draft: $('blogDraftContent').value }),
+          });
+          state.blogPublishStates[blog.id] = result.data;
+          notify('게시 완료', '목업 게시 상태로 전환되었습니다.');
+          await showBlog(blog.id);
+        } catch (error) {
+          setStatus('blogPublishStatus', error.message, true);
+        }
+      };
+      $('blogPublishVisible').onchange = async () => {
+        await api('/admin/blogs/' + blog.id + '/publish-state', {
+          method: 'PATCH',
+          body: JSON.stringify({ isVisible: $('blogPublishVisible').checked }),
+        });
+        notify($('blogPublishVisible').checked ? '공개 전환 완료' : '비공개 전환 완료', blog.title);
+      };
     }
 
     function activityTermRowHtml(item) {
@@ -1272,8 +1622,47 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       return '<div class="form-row term-row">'
         + '<input data-field="generation" inputmode="numeric" placeholder="기수" value="' + esc(item.generation ?? '') + '">'
         + '<input data-field="activityTerm" placeholder="Notion 작성기수" value="' + esc(item.activityTerm || '') + '">'
-        + '<input data-field="teamName" placeholder="팀" value="' + esc(item.teamName || '') + '">'
+        + '<div class="team-combobox"><input data-field="teamName" placeholder="팀" value="' + esc(item.teamName || '') + '" autocomplete="off"><div class="team-menu hidden"></div></div>'
         + '</div>';
+    }
+    function bindTeamComboboxes() {
+      document.querySelectorAll('.team-combobox').forEach((box) => {
+        const input = box.querySelector('[data-field="teamName"]');
+        const menu = box.querySelector('.team-menu');
+        input.onfocus = () => renderTeamMenu(input, menu);
+        input.oninput = () => renderTeamMenu(input, menu);
+        input.onblur = () => setTimeout(() => menu.classList.add('hidden'), 140);
+      });
+    }
+    function renderTeamMenu(input, menu) {
+      const value = input.value.trim();
+      const query = normalizeSearch(value);
+      const teams = knownTeamNames().filter((team) => !query || normalizeSearch(team).includes(query)).slice(0, 12);
+      const exact = knownTeamNames().some((team) => normalizeSearch(team) === query);
+      const createButton = value && !exact
+        ? '<button type="button" data-team-create="' + esc(value) + '">+ 신규 팀 생성: ' + esc(value) + '</button>'
+        : '';
+      menu.innerHTML = teams.map((team) => '<button type="button" data-team="' + esc(team) + '">' + esc(team) + '</button>').join('') + createButton;
+      if (!menu.innerHTML) {
+        menu.innerHTML = '<button type="button" disabled>일치하는 팀이 없습니다.</button>';
+      }
+      menu.classList.remove('hidden');
+      menu.querySelectorAll('[data-team]').forEach((button) => {
+        button.onclick = () => {
+          input.value = button.dataset.team;
+          menu.classList.add('hidden');
+        };
+      });
+      menu.querySelectorAll('[data-team-create]').forEach((button) => {
+        button.onclick = () => {
+          input.value = button.dataset.teamCreate;
+          menu.classList.add('hidden');
+        };
+      });
+    }
+    function knownTeamNames() {
+      return [...new Set(state.activityTerms.flatMap((item) => item.teams || []).filter(Boolean))]
+        .sort((left, right) => left.localeCompare(right, 'ko'));
     }
     function periodRowHtml(item) {
       return '<div class="form-row period-row">'
@@ -1481,6 +1870,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         method: 'PATCH',
         body: JSON.stringify({ isVisible }),
       })));
+      notify(isVisible ? '일괄 공개 완료' : '일괄 비공개 완료', ids.length + '개 항목이 변경되었습니다.');
       await reload();
     }
     function isCrewProjectCandidate(project, crewId) {
@@ -1626,6 +2016,8 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     $('refreshProjects').onclick = loadProjects;
     $('refreshCloudProducts').onclick = loadCloudProducts;
     $('refreshBlogs').onclick = loadBlogs;
+    $('blogAiManage').onclick = toggleBlogAiPanel;
+    $('saveBlogAiConfig').onclick = saveBlogAiConfig;
     $('newCloudProduct').onclick = () => showCloudProduct('new');
     $('crewSearch').addEventListener('input', renderCrewList);
     $('projectSearch').addEventListener('input', renderProjectList);

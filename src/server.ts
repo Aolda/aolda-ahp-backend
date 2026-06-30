@@ -218,6 +218,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     adminContentService,
     notionContentSyncService,
     notionCrewTeamWriteService,
+    aiBackend: env.aiBackend,
   });
   await registerTeamRoutes(app, { teamQueryService });
   await registerCloudRoutes(app, { cloudQueryService });
@@ -255,6 +256,9 @@ export async function buildApp(): Promise<FastifyInstance> {
           blog: env.notion.teamDbIds.blog ?? '<unset>',
         },
         ADMIN_DEFAULT_EMAIL: env.admin.defaultEmail,
+        AI_BACKEND_BASE_URL: env.aiBackend.baseUrl ? '<set>' : '<unset>',
+        AI_BACKEND_API_KEY: env.aiBackend.apiKey ? '<set>' : '<unset>',
+        AI_BACKEND_MODEL: env.aiBackend.model,
         CORS_ALLOW_ORIGINS: env.cors.origins,
         CORS_ALLOW_METHODS: env.cors.methods,
         CORS_ALLOW_HEADERS: env.cors.headers,

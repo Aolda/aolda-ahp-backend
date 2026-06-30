@@ -14,6 +14,9 @@ export const ALLOWED_ENV_KEYS = [
   'PROFILE_IMAGE_STORAGE_DIR',
   'PROFILE_IMAGE_PUBLIC_BASE_URL',
   'CREW_PROFILE_IMAGE_SYNC_ON_START',
+  'AI_BACKEND_BASE_URL',
+  'AI_BACKEND_API_KEY',
+  'AI_BACKEND_MODEL',
 ] as const;
 
 const DEFAULT_CORS_ALLOW_ORIGINS = [
@@ -92,6 +95,11 @@ export interface AppEnv {
     defaultPassword: string;
     sessionSecret: string;
   };
+  aiBackend: {
+    baseUrl?: string;
+    apiKey?: string;
+    model: string;
+  };
 }
 
 export function readAppEnv(): AppEnv {
@@ -128,6 +136,11 @@ export function readAppEnv(): AppEnv {
       defaultEmail: process.env.ADMIN_DEFAULT_EMAIL ?? 'admin',
       defaultPassword: process.env.ADMIN_DEFAULT_PASSWORD ?? 'admin',
       sessionSecret: process.env.ADMIN_SESSION_SECRET ?? 'dev-admin-session-secret',
+    },
+    aiBackend: {
+      baseUrl: process.env.AI_BACKEND_BASE_URL,
+      apiKey: process.env.AI_BACKEND_API_KEY,
+      model: process.env.AI_BACKEND_MODEL ?? 'gpt-4o-mini',
     },
   };
 }
