@@ -33,6 +33,9 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       --ring: #38bdf8;
       --radius: 18px;
       --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+      --glass: rgba(255, 255, 255, 0.64);
+      --glass-strong: rgba(255, 255, 255, 0.78);
+      --glass-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
     }
     * { box-sizing: border-box; }
     body {
@@ -73,10 +76,9 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       height: 64px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
       padding: 0 24px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.86);
+      background: rgba(248, 250, 252, 0.78);
       backdrop-filter: blur(14px);
       position: sticky;
       top: 0;
@@ -90,26 +92,76 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       display: grid;
       grid-template-columns: 250px minmax(0, 1fr);
       min-height: calc(100vh - 64px);
+      transition: grid-template-columns 180ms ease;
+    }
+    main.sidebar-collapsed {
+      grid-template-columns: 72px minmax(0, 1fr);
     }
     nav {
-      border-right: 1px solid var(--border);
-      padding: 18px;
-      background: #ffffff;
+      margin: .5rem;
+      border-radius: .75rem;
+      padding: 12px;
+      background: var(--glass);
+      backdrop-filter: blur(18px) saturate(125%);
+      box-shadow: var(--glass-shadow);
+      align-self: start;
+      min-height: calc(100vh - 80px);
+      overflow: hidden;
     }
     nav button {
       width: 100%;
       justify-content: flex-start;
       display: flex;
       align-items: center;
+      gap: 10px;
       margin-bottom: 8px;
-      border-radius: 14px;
-      padding: 0 14px;
+      border: 0;
+      border-radius: .75rem;
+      padding: 0 12px;
+      background: rgba(255, 255, 255, 0.46);
       color: var(--muted-foreground);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+      backdrop-filter: blur(14px) saturate(125%);
     }
+    nav button:hover { background: rgba(255, 255, 255, 0.72); }
     nav button.active {
-      background: var(--primary);
-      border-color: var(--primary);
-      color: var(--primary-foreground);
+      background: rgba(15, 23, 42, 0.9);
+      color: #ffffff;
+    }
+    nav button .nav-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    main.sidebar-collapsed nav {
+      padding: 10px;
+    }
+    main.sidebar-collapsed nav button {
+      justify-content: center;
+      padding: 0;
+    }
+    main.sidebar-collapsed nav button .nav-label {
+      display: none;
+    }
+    .nav-logo {
+      aspect-ratio: 1 / 1;
+      width: 54px;
+      margin: 2px auto 12px;
+      border-radius: .75rem;
+      background: #e5e7eb;
+      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+    }
+    main:not(.sidebar-collapsed) .nav-logo {
+      width: min(132px, 72%);
+    }
+    .nav-toggle {
+      margin-bottom: 14px;
+    }
+    .icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      stroke-width: 1.8;
     }
     section { padding: 22px; }
     label {
@@ -148,6 +200,15 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       gap: 10px;
       flex-wrap: wrap;
       margin-bottom: 14px;
+    }
+    .session-card {
+      min-height: 42px;
+      margin-bottom: 0;
+      padding: 0 8px 0 14px;
+      border-radius: .75rem;
+      background: var(--glass-strong);
+      backdrop-filter: blur(18px) saturate(125%);
+      box-shadow: var(--glass-shadow);
     }
     .page-head {
       display: flex;
@@ -292,14 +353,18 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     @media (max-width: 880px) {
       main { grid-template-columns: 1fr; }
+      main.sidebar-collapsed { grid-template-columns: 1fr; }
       nav {
-        border-right: 0;
-        border-bottom: 1px solid var(--border);
+        min-height: auto;
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 8px;
       }
+      .nav-logo { display: none; }
+      .nav-toggle { grid-column: 1 / -1; }
       nav button { margin-bottom: 0; }
+      main.sidebar-collapsed nav button .nav-label { display: inline; }
+      main.sidebar-collapsed nav button { justify-content: flex-start; padding: 0 12px; }
       .grid { grid-template-columns: 1fr; }
       .list { max-height: none; }
       .page-head { display: block; }
@@ -309,9 +374,31 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
   </style>
 </head>
 <body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <symbol id="icon-panel-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 4h16v16H4z"></path><path d="M9 4v16"></path>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path>
+    </symbol>
+    <symbol id="icon-calendar-stats" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5h16v14H4z"></path><path d="M16 3v4"></path><path d="M8 3v4"></path><path d="M4 11h16"></path><path d="M8 16h2"></path><path d="M14 16h2"></path>
+    </symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 7a4 4 0 1 0 0 8a4 4 0 0 0 0 -8"></path><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"></path>
+    </symbol>
+    <symbol id="icon-folder-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 5h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V7a2 2 0 0 1 2 -2"></path><path d="M10 13l-2 2l2 2"></path><path d="M14 13l2 2l-2 2"></path>
+    </symbol>
+    <symbol id="icon-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l8 4.5v9L12 21l-8 -4.5v-9z"></path><path d="M12 12l8 -4.5"></path><path d="M12 12v9"></path><path d="M12 12L4 7.5"></path><path d="M16 5.25l-8 4.5"></path>
+    </symbol>
+    <symbol id="icon-notebook" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 4h11a2 2 0 0 1 2 2v14H8a3 3 0 0 1 -3 -3V5a1 1 0 0 1 1 -1"></path><path d="M8 4v17"></path><path d="M10 8h5"></path><path d="M10 12h5"></path>
+    </symbol>
+  </svg>
   <header>
-    <h1>Aolda 관리자 콘솔</h1>
-    <div class="toolbar">
+    <div class="toolbar session-card">
       <span id="session" class="muted"></span>
       <button id="logout" class="ghost hidden">로그아웃</button>
     </div>
@@ -333,12 +420,28 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
 
   <main id="appView" class="hidden">
     <nav>
-      <button data-tab="sync" data-loader="loadSync" class="active">동기화</button>
-      <button data-tab="activityTerms" data-loader="loadActivityTerms">활동기수</button>
-      <button data-tab="crews" data-loader="loadCrews">크루 관리</button>
-      <button data-tab="projects" data-loader="loadProjects">프로젝트 관리</button>
-      <button data-tab="cloudProducts" data-loader="loadCloudProducts">제품 관리</button>
-      <button data-tab="blogs" data-loader="loadBlogs">블로그 관리</button>
+      <div class="nav-logo" aria-label="로고 영역"></div>
+      <button id="sidebarToggle" class="nav-toggle" type="button" title="사이드바 접기">
+        <svg class="icon"><use href="#icon-panel-left"></use></svg><span class="nav-label">메뉴 접기</span>
+      </button>
+      <button class="nav-item active" data-tab="sync" data-loader="loadSync" title="동기화">
+        <svg class="icon"><use href="#icon-refresh"></use></svg><span class="nav-label">동기화</span>
+      </button>
+      <button class="nav-item" data-tab="activityTerms" data-loader="loadActivityTerms" title="활동기수">
+        <svg class="icon"><use href="#icon-calendar-stats"></use></svg><span class="nav-label">활동기수</span>
+      </button>
+      <button class="nav-item" data-tab="crews" data-loader="loadCrews" title="크루 관리">
+        <svg class="icon"><use href="#icon-users"></use></svg><span class="nav-label">크루 관리</span>
+      </button>
+      <button class="nav-item" data-tab="projects" data-loader="loadProjects" title="프로젝트 관리">
+        <svg class="icon"><use href="#icon-folder-code"></use></svg><span class="nav-label">프로젝트 관리</span>
+      </button>
+      <button class="nav-item" data-tab="cloudProducts" data-loader="loadCloudProducts" title="제품 관리">
+        <svg class="icon"><use href="#icon-package"></use></svg><span class="nav-label">제품 관리</span>
+      </button>
+      <button class="nav-item" data-tab="blogs" data-loader="loadBlogs" title="블로그 관리">
+        <svg class="icon"><use href="#icon-notebook"></use></svg><span class="nav-label">블로그 관리</span>
+      </button>
     </nav>
     <section>
       <div id="sync" class="tab">
@@ -500,6 +603,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       cloudProducts: [],
       blogs: [],
       syncPollTimer: null,
+      sidebarCollapsed: localStorage.getItem('adminSidebarCollapsed') === 'true',
     };
     const $ = (id) => document.getElementById(id);
 
@@ -533,6 +637,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       $('appView').classList.remove('hidden');
       $('logout').classList.remove('hidden');
       $('session').textContent = user?.email || '';
+      applySidebarState();
     }
     function showLogin() {
       $('loginView').classList.remove('hidden');
@@ -577,9 +682,18 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       state.token = '';
       showLogin();
     });
-    document.querySelectorAll('nav button').forEach((button) => {
+    $('sidebarToggle').addEventListener('click', () => {
+      state.sidebarCollapsed = !state.sidebarCollapsed;
+      localStorage.setItem('adminSidebarCollapsed', String(state.sidebarCollapsed));
+      applySidebarState();
+    });
+    function applySidebarState() {
+      $('appView').classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
+      $('sidebarToggle').title = state.sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기';
+    }
+    document.querySelectorAll('nav .nav-item').forEach((button) => {
       button.addEventListener('click', async () => {
-        document.querySelectorAll('nav button').forEach((item) => item.classList.remove('active'));
+        document.querySelectorAll('nav .nav-item').forEach((item) => item.classList.remove('active'));
         document.querySelectorAll('.tab').forEach((item) => item.classList.add('hidden'));
         button.classList.add('active');
         $(button.dataset.tab).classList.remove('hidden');
