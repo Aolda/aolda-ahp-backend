@@ -148,12 +148,14 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       display: none;
     }
     .nav-logo {
+      display: grid;
+      place-items: center;
       aspect-ratio: 1 / 1;
       width: 38px;
       margin: 2px auto 12px;
       border-radius: .75rem;
-      background: #e5e7eb;
-      box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+      background: rgba(255, 255, 255, 0.56);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
       transition: all 220ms var(--ease-snap);
     }
     main:not(.sidebar-collapsed) .nav-logo {
@@ -161,6 +163,11 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     .nav-toggle {
       margin-bottom: 14px;
+    }
+    .nav-logo-svg {
+      display: block;
+      width: 22px;
+      height: 22px;
     }
     .icon {
       width: 18px;
@@ -348,6 +355,94 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     .danger { color: var(--destructive); }
     .muted { color: var(--muted-foreground); }
+    .sync-panel {
+      display: grid;
+      gap: 14px;
+    }
+    .sync-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .sync-stat {
+      padding: 14px;
+      border-radius: .75rem;
+      background: rgba(255, 255, 255, 0.58);
+      box-shadow: 0 5px 16px rgba(15, 23, 42, 0.04);
+      backdrop-filter: blur(14px) saturate(125%);
+    }
+    .sync-stat strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 20px;
+      color: var(--foreground);
+    }
+    .sync-steps {
+      display: grid;
+      gap: 10px;
+    }
+    .sync-step {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border-radius: .75rem;
+      background: rgba(255, 255, 255, 0.58);
+      box-shadow: 0 5px 16px rgba(15, 23, 42, 0.04);
+      backdrop-filter: blur(14px) saturate(125%);
+    }
+    .sync-step-index {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.08);
+      color: var(--muted-foreground);
+      font-weight: 800;
+    }
+    .sync-step.active .sync-step-index {
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+    .sync-step.done .sync-step-index {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .sync-step.failed .sync-step-index {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    .sync-step-title {
+      font-weight: 800;
+      color: var(--foreground);
+    }
+    .sync-step-message {
+      margin-top: 4px;
+      color: var(--muted-foreground);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .sync-progress {
+      height: 8px;
+      margin-top: 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.08);
+      overflow: hidden;
+    }
+    .sync-progress-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #0e76c4, #38bdf8);
+      transition: width 220ms var(--ease-snap);
+    }
+    .sync-step-count {
+      min-width: 78px;
+      text-align: right;
+      color: var(--muted-foreground);
+      font-weight: 750;
+    }
     .login {
       max-width: 400px;
       margin: 12vh auto;
@@ -378,6 +473,9 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       .page-head { display: block; }
       .form-row { grid-template-columns: 1fr; }
       .term-card { grid-template-columns: 1fr; }
+      .sync-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .sync-step { grid-template-columns: 34px minmax(0, 1fr); }
+      .sync-step-count { grid-column: 2; text-align: left; }
     }
   </style>
 </head>
@@ -406,7 +504,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     </symbol>
   </svg>
   <div id="loginView" class="login">
-    <h2>관리자 로그인</h2>
+    <h2>관리콘솔 로그인</h2>
     <form id="loginForm">
       <label>이메일</label>
       <input id="email" autocomplete="username" value="admin" />
@@ -421,7 +519,32 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
 
   <main id="appView" class="hidden">
     <nav>
-      <div class="nav-logo" aria-label="로고 영역"></div>
+      <div class="nav-logo" aria-label="Aolda 로고">
+        <svg class="nav-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" role="img" aria-label="Aolda">
+          <defs>
+            <linearGradient id="aolda-logo-linear-gradient" x1="19.1" y1="6.1" x2="3.3" y2="20.1" gradientTransform="translate(0 24) scale(1 -1)" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#206ca5"></stop>
+              <stop offset="1" stop-color="#0e76c4"></stop>
+            </linearGradient>
+            <mask id="aolda-logo-mask" x="-6.3" y=".2" width="31.7" height="27.4" maskUnits="userSpaceOnUse">
+              <circle fill="#d9d9d9" cx="11.1" cy="10.8" r="10.6"></circle>
+            </mask>
+            <linearGradient id="aolda-logo-linear-gradient1" x1="-177.8" y1="-82.4" x2="-180.6" y2="-93.1" gradientTransform="translate(182.7 -70.2) scale(1 -1)" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#58aee5"></stop>
+              <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
+            </linearGradient>
+            <linearGradient id="aolda-logo-linear-gradient2" x1="9.7" y1="11" x2="20" y2="-3.1" gradientTransform="translate(0 24) scale(1 -1)" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#a7d7f0"></stop>
+              <stop offset="1" stop-color="#fff" stop-opacity="0"></stop>
+            </linearGradient>
+          </defs>
+          <circle fill="url(#aolda-logo-linear-gradient)" cx="11.1" cy="10.8" r="10.6"></circle>
+          <g mask="url(#aolda-logo-mask)">
+            <ellipse fill="url(#aolda-logo-linear-gradient1)" cx="3.5" cy="17.8" rx="10.6" ry="7.6" transform="translate(-9.7 5.3) rotate(-35.5)"></ellipse>
+            <ellipse fill="url(#aolda-logo-linear-gradient2)" cx="14.8" cy="20" rx="10.6" ry="7.6"></ellipse>
+          </g>
+        </svg>
+      </div>
       <button id="sidebarToggle" class="nav-toggle" type="button" title="사이드바 접기">
         <svg class="icon"><use href="#icon-panel-left"></use></svg><span class="nav-label">메뉴 접기</span>
       </button>
@@ -459,7 +582,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           </div>
           <button id="syncNow" class="primary">실행</button>
         </div>
-        <div class="card"><pre id="syncOutput" class="content muted"></pre></div>
+        <div class="card"><div id="syncOutput" class="content sync-panel"></div></div>
       </div>
 
       <div id="activityTerms" class="tab hidden">
@@ -718,18 +841,18 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           pollSyncJob(result.job.id);
         }
       } catch (error) {
-        $('syncOutput').textContent = error.message;
+        renderSyncError(error.message);
       }
     }
     $('syncNow').addEventListener('click', async () => {
       $('syncNow').disabled = true;
-      $('syncOutput').textContent = '동기화 작업을 시작하는 중입니다...';
+      renderSyncStarting();
       try {
         const result = await api('/admin/sync/notion', { method: 'POST' });
         renderSyncJob(result.job);
         pollSyncJob(result.job.id);
       } catch (error) {
-        $('syncOutput').textContent = error.message;
+        renderSyncError(error.message);
         $('syncNow').disabled = false;
       }
     });
@@ -748,47 +871,95 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           $('syncNow').disabled = false;
           await Promise.all([loadActivityTerms(), loadCrews(), loadProjects(), loadCloudProducts(), loadBlogs()]);
         } catch (error) {
-          $('syncOutput').textContent = error.message;
+          renderSyncError(error.message);
           $('syncNow').disabled = false;
         }
       }, 3000);
     }
     function renderSyncJob(job) {
       if (!job) {
-        $('syncOutput').textContent = '아직 실행된 동기화 작업이 없습니다.';
+        $('syncOutput').innerHTML = '<div class="meta">아직 실행된 동기화 작업이 없습니다.</div>';
         $('syncNow').disabled = false;
         return;
       }
       const elapsed = Math.max(0, Math.round((Date.parse(job.finishedAt || new Date().toISOString()) - Date.parse(job.startedAt)) / 1000));
       const lastLog = job.logs[job.logs.length - 1];
-      const stage = lastLog?.metadata?.stage || job.source;
-      const processed = lastLog?.metadata?.processed;
-      const total = lastLog?.metadata?.total;
-      const progress = Number.isInteger(processed) && Number.isInteger(total) ? processed + '/' + total : '-';
+      const steps = buildSyncSteps(job);
       $('syncNow').disabled = job.status === 'RUNNING';
-      $('syncOutput').textContent = [
-        '상태: ' + job.status,
-        '현재 단계: ' + stage,
-        '진행률: ' + progress,
-        '마지막 메시지: ' + (lastLog?.message || '-'),
-        '소요 시간: ' + elapsed + '초',
-        '',
-        JSON.stringify({
-        id: job.id,
-        status: job.status,
-        startedAt: job.startedAt,
-        finishedAt: job.finishedAt,
-        elapsedSeconds: elapsed,
-        counts: {
-          total: job.totalCount,
-          created: job.createdCount,
-          updated: job.updatedCount,
-          archived: job.archivedCount,
-        },
-        errorMessage: job.errorMessage,
-        logs: job.logs,
-        }, null, 2)
-      ].join('\\n');
+      $('syncOutput').innerHTML =
+        '<div class="sync-summary">'
+        + syncStatHtml('상태', syncStatusText(job.status))
+        + syncStatHtml('처리', job.totalCount + '건')
+        + syncStatHtml('생성', job.createdCount + '건')
+        + syncStatHtml('수정', job.updatedCount + '건')
+        + '</div>'
+        + '<div class="sync-steps">' + steps.map(syncStepHtml).join('') + '</div>'
+        + '<div class="meta">마지막 메시지: ' + esc(lastLog?.message || '-') + ' · 소요 시간 ' + elapsed + '초</div>'
+        + (job.errorMessage ? '<div class="danger">' + esc(job.errorMessage) + '</div>' : '');
+    }
+    function renderSyncStarting() {
+      $('syncOutput').innerHTML =
+        '<div class="sync-summary">'
+        + syncStatHtml('상태', '시작 중')
+        + syncStatHtml('처리', '0건')
+        + syncStatHtml('생성', '0건')
+        + syncStatHtml('수정', '0건')
+        + '</div>'
+        + '<div class="sync-steps">' + ['crew', 'project', 'blog'].map((stage, index) => syncStepHtml({
+          stage,
+          label: syncStageLabel(stage),
+          status: stage === 'crew' ? 'active' : 'pending',
+          message: stage === 'crew' ? '동기화 작업을 준비하고 있습니다.' : '대기 중',
+          processed: 0,
+          total: 0,
+          percent: 0,
+          index: index + 1,
+        })).join('') + '</div>';
+    }
+    function renderSyncError(message) {
+      $('syncOutput').innerHTML = '<div class="danger">' + esc(message) + '</div>';
+    }
+    function buildSyncSteps(job) {
+      const stageOrder = ['crew', 'project', 'blog'];
+      const failed = job.status === 'FAILED';
+      return stageOrder.map((stage, index) => {
+        const logs = job.logs.filter((log) => log.metadata?.stage === stage);
+        const last = logs[logs.length - 1];
+        const processed = Number(last?.metadata?.processed ?? 0);
+        const total = Number(last?.metadata?.total ?? 0);
+        const completed = logs.some((log) => log.message.includes('completed'));
+        const percent = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : (completed ? 100 : 0);
+        const active = job.status === 'RUNNING' && logs.length > 0 && !completed;
+        return {
+          stage,
+          label: syncStageLabel(stage),
+          status: failed && logs.length > 0 && !completed ? 'failed' : completed || job.status === 'SUCCEEDED' ? 'done' : active ? 'active' : 'pending',
+          message: last?.message || '대기 중',
+          processed,
+          total,
+          percent,
+          index: index + 1,
+        };
+      });
+    }
+    function syncStepHtml(step) {
+      const count = step.total > 0 ? step.processed + '/' + step.total : '-';
+      return '<div class="sync-step ' + esc(step.status) + '">'
+        + '<div class="sync-step-index">' + (step.status === 'done' ? '✓' : step.index) + '</div>'
+        + '<div><div class="sync-step-title">' + esc(step.label) + '</div>'
+        + '<div class="sync-step-message">' + esc(step.message) + '</div>'
+        + '<div class="sync-progress"><div class="sync-progress-fill" style="width:' + step.percent + '%"></div></div></div>'
+        + '<div class="sync-step-count">' + esc(count) + '</div>'
+        + '</div>';
+    }
+    function syncStatHtml(label, value) {
+      return '<div class="sync-stat"><span class="meta">' + esc(label) + '</span><strong>' + esc(value) + '</strong></div>';
+    }
+    function syncStageLabel(stage) {
+      return { crew: '크루', project: '프로젝트', blog: '블로그' }[stage] || stage;
+    }
+    function syncStatusText(status) {
+      return { RUNNING: '진행 중', SUCCEEDED: '완료', FAILED: '실패' }[status] || status;
     }
 
     async function loadActivityTerms() {

@@ -20,6 +20,11 @@ export class CrewProfileImageCacheRepository {
     }
 
     const rows = await this.prisma.crewProfileImageCache.findMany({
+      select: {
+        notionPageId: true,
+        imageUrl: true,
+        lastSyncedAt: true,
+      },
       where: {
         notionPageId: {
           in: pageIds,
@@ -33,11 +38,11 @@ export class CrewProfileImageCacheRepository {
         {
           notionPageId: row.notionPageId,
           imageUrl: row.imageUrl,
-          sourceImageUrl: row.sourceImageUrl,
-          localPath: row.localPath,
-          contentType: row.contentType,
-          contentHash: row.contentHash,
-          fileSize: row.fileSize,
+          sourceImageUrl: null,
+          localPath: null,
+          contentType: null,
+          contentHash: null,
+          fileSize: null,
           lastSyncedAt: row.lastSyncedAt,
         },
       ]),

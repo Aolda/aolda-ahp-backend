@@ -67,6 +67,7 @@ const DEFAULT_CREW_PROFILE_DATA_SOURCE_ID = '31fa7bac-f955-807d-a7af-000b8a0ab07
 const DEFAULT_STUDY_DATA_SOURCE_ID = '457a7bac-f955-822a-9359-0706ae009fca';
 const GENERAL_MEMBER_ROLE = 'CREW_ROLE/CREW';
 const UNKNOWN_CREW_TEAM = 'DUMMY_TEAM_NOT_FETCHED_YET';
+const PROFILE_IMAGE_DOWNLOAD_CONCURRENCY = 5;
 
 interface CrewProfileSupplement {
   univDepartment: string | null;
@@ -378,17 +379,19 @@ export class TeamRealRepository implements TeamRepository {
     const livePages = await this.fetchLiveActivityPages();
 
     if (!this.teamActivityMetadataRepository) {
-      return Promise.all(
+      const activityAggregates = await Promise.all(
         livePages.map(({ page, fetcher }, index) =>
           this.buildActivityAggregate(page, index + 1, fetcher),
         ),
       );
+
+      return this.sortActivityAggregatesById(activityAggregates);
     }
 
     const metadataMap = await this.syncAndLoadActivityMetadata(livePages);
     const visibleLivePages = livePages.filter(({ page }) => metadataMap.get(page.id)?.isVisible);
 
-    return Promise.all(
+    const activityAggregates = await Promise.all(
       visibleLivePages.map(({ page, fetcher }) => {
         const metadata = metadataMap.get(page.id);
         if (!metadata) {
@@ -398,6 +401,12 @@ export class TeamRealRepository implements TeamRepository {
         return this.buildActivityAggregate(page, metadata.id, fetcher, metadata);
       }),
     );
+
+    return this.sortActivityAggregatesById(activityAggregates);
+  }
+
+  private sortActivityAggregatesById(activities: ActivityAggregate[]): ActivityAggregate[] {
+    return [...activities].sort((left, right) => left.activityId - right.activityId);
   }
 
   private composeActivityAggregate(
@@ -736,7 +745,7 @@ export class TeamRealRepository implements TeamRepository {
   }
 
   private async fetchCrewProfileImageCacheRecords(
-    pages: Array<Pick<PageObjectResponse, 'id'>>,
+    pages: Array<Pick<PageObjectResponse, 'id' | 'properties'>>,
   ): Promise<CrewProfileImageCacheRecord[]> {
     if (!this.profileImageFileStorage) {
       throw new Error('PROFILE_IMAGE_STORAGE_DIR must be configured for profile image sync');
@@ -744,9 +753,15 @@ export class TeamRealRepository implements TeamRepository {
 
     const lastSyncedAt = new Date();
     const records: CrewProfileImageCacheRecord[] = [];
+    const downloadTargets: Array<{
+      notionPageId: string;
+      sourceImageUrl: string;
+      userName: string;
+    }> = [];
 
     for (const page of pages) {
       const sourceImageUrl = await this.crewFetcher.fetchProfileImageUrl(page.id);
+      const userName = extractCrewName(page);
 
       if (!sourceImageUrl) {
         records.push({
@@ -762,20 +777,66 @@ export class TeamRealRepository implements TeamRepository {
         continue;
       }
 
-      const storedImage = await this.profileImageFileStorage.saveFromUrl(page.id, sourceImageUrl);
-      records.push({
-        notionPageId: page.id,
-        imageUrl: storedImage.publicUrl,
-        sourceImageUrl,
-        localPath: storedImage.localPath,
-        contentType: storedImage.contentType,
-        contentHash: storedImage.contentHash,
-        fileSize: storedImage.fileSize,
-        lastSyncedAt,
-      });
+      downloadTargets.push({ notionPageId: page.id, sourceImageUrl, userName });
     }
 
-    return records;
+    const downloadedRecords = await this.mapWithConcurrency(
+      downloadTargets,
+      PROFILE_IMAGE_DOWNLOAD_CONCURRENCY,
+      async ({
+        notionPageId,
+        sourceImageUrl,
+        userName,
+      }): Promise<CrewProfileImageCacheRecord | null> => {
+        try {
+          const storedImage = await this.profileImageFileStorage!.saveFromUrl(
+            notionPageId,
+            sourceImageUrl,
+          );
+
+          console.log(`[PROFILE CACHE UPDATE] ${userName}(${notionPageId})`);
+
+          return {
+            notionPageId,
+            imageUrl: storedImage.publicUrl,
+            sourceImageUrl,
+            localPath: storedImage.localPath,
+            contentType: storedImage.contentType,
+            contentHash: storedImage.contentHash,
+            fileSize: storedImage.fileSize,
+            lastSyncedAt,
+          };
+        } catch {
+          return null;
+        }
+      },
+    );
+
+    return records.concat(
+      downloadedRecords.filter(
+        (record): record is CrewProfileImageCacheRecord => record !== null,
+      ),
+    );
+  }
+
+  private async mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    mapper: (item: T) => Promise<R>,
+  ): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let nextIndex = 0;
+
+    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex]);
+      }
+    });
+
+    await Promise.all(workers);
+    return results;
   }
 
   private mapExecutiveRole(rawRole: string | null): string {

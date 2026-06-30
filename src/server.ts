@@ -194,6 +194,8 @@ export async function buildApp(): Promise<FastifyInstance> {
           createNotionClient(env.notion.apiKey),
           env.notion.teamDbIds,
           new ContentSourceRepository(getPrismaClient()),
+          undefined,
+          { syncCrewDetails: false },
         )
       : undefined;
   const notionCrewTeamWriteService =

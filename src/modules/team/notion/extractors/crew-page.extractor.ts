@@ -5,7 +5,7 @@ export function isCurrentActiveCrew(page: PageObjectResponse, currentActivityTer
   return crewWritingTerm === currentActivityTerm;
 }
 
-export function extractCrewName(page: PageObjectResponse): string {
+export function extractCrewName(page: Pick<PageObjectResponse, 'properties'>): string {
   const title = (page.properties.Name as { title?: Array<{ plain_text?: string }> }).title;
   return title?.[0]?.plain_text ?? 'UNKNOWN_CREW_NAME';
 }
