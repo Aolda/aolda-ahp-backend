@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AdminAuthService, type AdminSessionUser } from '../modules/admin/services/admin-auth.service';
 import {
   AdminContentService,
+  type UpsertCloudProductInput,
   type UpdateCrewAdminInput,
   type UpdateCrewBlogVisibilityInput,
   type UpdateCrewProjectVisibilityInput,
@@ -303,6 +304,88 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
       if (!contentService) return undefined;
       return { data: await contentService.listBlogs() };
     },
+  );
+
+  app.get(
+    '/admin/cloud-products',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: '관리자 클라우드 제품 목록 조회' } as any,
+    },
+    async (_request, reply) => {
+      const contentService = getContentService(deps, reply);
+      if (!contentService) return undefined;
+      return { data: await contentService.listCloudProducts() };
+    },
+  );
+
+  app.get(
+    '/admin/cloud-products/:id',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: '관리자 클라우드 제품 상세 조회' } as any,
+    },
+    async (request: FastifyRequest<{ Params: IdParams }>, reply) => {
+      const contentService = getContentService(deps, reply);
+      if (!contentService) return undefined;
+      const product = await contentService.getCloudProduct(request.params.id);
+      return product
+        ? { data: product }
+        : reply.code(404).send({ message: 'Cloud product not found' });
+    },
+  );
+
+  app.post(
+    '/admin/cloud-products',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: '관리자 클라우드 제품 등록' } as any,
+    },
+    async (request: FastifyRequest<{ Body: UpsertCloudProductInput }>, reply) =>
+      safeAdminWrite(reply, () => deps.adminContentService!.createCloudProduct(request.body)),
+  );
+
+  app.put(
+    '/admin/cloud-products/:id',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: '관리자 클라우드 제품 수정' } as any,
+    },
+    async (
+      request: FastifyRequest<{ Params: IdParams; Body: UpsertCloudProductInput }>,
+      reply,
+    ) =>
+      safeAdminWrite(reply, () =>
+        deps.adminContentService!.updateCloudProduct(request.params.id, request.body),
+      ),
+  );
+
+  app.patch(
+    '/admin/cloud-products/:id',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: '관리자 클라우드 제품 공개 여부 수정' } as any,
+    },
+    async (
+      request: FastifyRequest<{ Params: IdParams; Body: { isVisible?: boolean } }>,
+      reply,
+    ) =>
+      safeAdminWrite(reply, () =>
+        deps.adminContentService!.updateCloudProductVisibility(
+          request.params.id,
+          Boolean(request.body.isVisible),
+        ),
+      ),
+  );
+
+  app.delete(
+    '/admin/cloud-products/:id',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: '관리자 클라우드 제품 삭제' } as any,
+    },
+    async (request: FastifyRequest<{ Params: IdParams }>, reply) =>
+      safeAdminWrite(reply, () => deps.adminContentService!.deleteCloudProduct(request.params.id)),
   );
 
   app.post(

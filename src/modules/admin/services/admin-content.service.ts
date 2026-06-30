@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 export interface UpdateCrewAdminInput {
   isVisible?: boolean;
@@ -46,6 +46,39 @@ export interface UpdateProjectParticipantInput {
 export interface UpdateProjectFeaturedBlogInput {
   blogPostSourceId: string;
   sortOrder?: number;
+}
+
+export interface UpsertCloudProductParticipantInput {
+  crewSourceId?: string | null;
+  crewPublicId?: number | null;
+  profileUrl?: string | null;
+  crewName: string;
+  univDepartment?: string | null;
+  univJoinedYear?: string | null;
+  sortOrder?: number;
+}
+
+export interface UpsertCloudProductRelatedServiceInput {
+  pageTitle: string;
+  thumbnailUrl?: string | null;
+  serviceLink?: string | null;
+  sortOrder?: number;
+}
+
+export interface UpsertCloudProductInput {
+  categoryCode: string;
+  categoryTitle?: string;
+  categoryImageUrl?: string | null;
+  projectSourceId?: string | null;
+  productIconUrl?: string | null;
+  productName: string;
+  description: string;
+  cloudLink?: string | null;
+  content: string;
+  isVisible?: boolean;
+  sortOrder?: number;
+  participants?: UpsertCloudProductParticipantInput[];
+  relatedServices?: UpsertCloudProductRelatedServiceInput[];
 }
 
 export class AdminContentService {
@@ -344,6 +377,136 @@ export class AdminContentService {
     });
   }
 
+  async listCloudProducts() {
+    return this.prisma.cloudProduct.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { publicId: 'asc' }],
+      include: {
+        category: true,
+        projectSource: true,
+        participants: { orderBy: [{ sortOrder: 'asc' }, { crewName: 'asc' }] },
+        relatedServices: { orderBy: [{ sortOrder: 'asc' }, { pageTitle: 'asc' }] },
+      },
+    });
+  }
+
+  async getCloudProduct(productId: string) {
+    return this.prisma.cloudProduct.findUnique({
+      where: { id: productId },
+      include: {
+        category: true,
+        projectSource: true,
+        participants: { orderBy: [{ sortOrder: 'asc' }, { crewName: 'asc' }] },
+        relatedServices: { orderBy: [{ sortOrder: 'asc' }, { pageTitle: 'asc' }] },
+      },
+    });
+  }
+
+  async createCloudProduct(input: UpsertCloudProductInput) {
+    this.validateCloudProductInput(input);
+    await this.ensureCloudProductProject(input.projectSourceId);
+    await this.ensureCloudProductParticipantCrews(input.participants);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.cloudProductCategory.upsert({
+        where: { code: input.categoryCode },
+        create: {
+          code: input.categoryCode,
+          categoryTitle: input.categoryTitle?.trim() || input.categoryCode,
+          categoryImageUrl: input.categoryImageUrl,
+        },
+        update: this.omitUndefined({
+          categoryTitle: input.categoryTitle?.trim() || undefined,
+          categoryImageUrl: input.categoryImageUrl,
+        }),
+      });
+
+      const product = await tx.cloudProduct.create({
+        data: {
+          categoryCode: input.categoryCode,
+          projectSourceId: input.projectSourceId || null,
+          productIconUrl: input.productIconUrl,
+          productName: input.productName,
+          description: input.description,
+          cloudLink: input.cloudLink,
+          content: input.content,
+          isVisible: input.isVisible ?? false,
+          sortOrder: input.sortOrder ?? 0,
+        },
+      });
+
+      await this.replaceCloudProductChildren(tx, product.id, input);
+      return tx.cloudProduct.findUnique({
+        where: { id: product.id },
+        include: {
+          category: true,
+          projectSource: true,
+          participants: { orderBy: [{ sortOrder: 'asc' }, { crewName: 'asc' }] },
+          relatedServices: { orderBy: [{ sortOrder: 'asc' }, { pageTitle: 'asc' }] },
+        },
+      });
+    });
+  }
+
+  async updateCloudProduct(productId: string, input: UpsertCloudProductInput) {
+    this.validateCloudProductInput(input);
+    await this.ensureCloudProductExists(productId);
+    await this.ensureCloudProductProject(input.projectSourceId);
+    await this.ensureCloudProductParticipantCrews(input.participants);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.cloudProductCategory.upsert({
+        where: { code: input.categoryCode },
+        create: {
+          code: input.categoryCode,
+          categoryTitle: input.categoryTitle?.trim() || input.categoryCode,
+          categoryImageUrl: input.categoryImageUrl,
+        },
+        update: this.omitUndefined({
+          categoryTitle: input.categoryTitle?.trim() || undefined,
+          categoryImageUrl: input.categoryImageUrl,
+        }),
+      });
+
+      await tx.cloudProduct.update({
+        where: { id: productId },
+        data: {
+          categoryCode: input.categoryCode,
+          projectSourceId: input.projectSourceId || null,
+          productIconUrl: input.productIconUrl,
+          productName: input.productName,
+          description: input.description,
+          cloudLink: input.cloudLink,
+          content: input.content,
+          isVisible: input.isVisible ?? false,
+          sortOrder: input.sortOrder ?? 0,
+        },
+      });
+
+      await this.replaceCloudProductChildren(tx, productId, input);
+      return tx.cloudProduct.findUnique({
+        where: { id: productId },
+        include: {
+          category: true,
+          projectSource: true,
+          participants: { orderBy: [{ sortOrder: 'asc' }, { crewName: 'asc' }] },
+          relatedServices: { orderBy: [{ sortOrder: 'asc' }, { pageTitle: 'asc' }] },
+        },
+      });
+    });
+  }
+
+  async updateCloudProductVisibility(productId: string, isVisible: boolean) {
+    await this.ensureCloudProductExists(productId);
+    return this.prisma.cloudProduct.update({
+      where: { id: productId },
+      data: { isVisible },
+      include: { category: true, projectSource: true },
+    });
+  }
+
+  async deleteCloudProduct(productId: string) {
+    await this.ensureCloudProductExists(productId);
+    return this.prisma.cloudProduct.delete({ where: { id: productId } });
+  }
+
   private async ensureCrewExists(crewSourceId: string): Promise<void> {
     const crew = await this.prisma.crewSource.findUnique({
       where: { id: crewSourceId },
@@ -361,6 +524,90 @@ export class AdminContentService {
     });
     if (!project) {
       throw new Error(`Project source not found: ${projectSourceId}`);
+    }
+  }
+
+  private async ensureCloudProductExists(productId: string): Promise<void> {
+    const product = await this.prisma.cloudProduct.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
+    if (!product) {
+      throw new Error(`Cloud product not found: ${productId}`);
+    }
+  }
+
+  private async ensureCloudProductProject(projectSourceId: string | null | undefined): Promise<void> {
+    if (!projectSourceId) return;
+    await this.ensureProjectExists(projectSourceId);
+  }
+
+  private async ensureCloudProductParticipantCrews(
+    participants: UpsertCloudProductParticipantInput[] | undefined,
+  ): Promise<void> {
+    const crewSourceIds = [
+      ...new Set((participants ?? []).map((participant) => participant.crewSourceId).filter(Boolean)),
+    ] as string[];
+    if (crewSourceIds.length === 0) return;
+
+    const existingCount = await this.prisma.crewSource.count({
+      where: { id: { in: crewSourceIds } },
+    });
+    if (existingCount !== crewSourceIds.length) {
+      throw new Error('Cloud product participant crew source not found');
+    }
+  }
+
+  private validateCloudProductInput(input: UpsertCloudProductInput): void {
+    if (!input.categoryCode?.trim()) {
+      throw new Error('categoryCode is required');
+    }
+    if (!input.productName?.trim()) {
+      throw new Error('productName is required');
+    }
+    if (!input.description?.trim()) {
+      throw new Error('description is required');
+    }
+    if (!input.content?.trim()) {
+      throw new Error('content is required');
+    }
+  }
+
+  private async replaceCloudProductChildren(
+    tx: Prisma.TransactionClient,
+    productId: string,
+    input: UpsertCloudProductInput,
+  ): Promise<void> {
+    await tx.cloudProductParticipant.deleteMany({ where: { cloudProductId: productId } });
+    await tx.cloudProductRelatedService.deleteMany({ where: { cloudProductId: productId } });
+
+    const participants = (input.participants ?? [])
+      .filter((participant) => participant.crewName?.trim())
+      .map((participant, index) => ({
+        cloudProductId: productId,
+        crewSourceId: participant.crewSourceId || null,
+        crewPublicId: participant.crewPublicId ?? null,
+        profileUrl: participant.profileUrl ?? null,
+        crewName: participant.crewName.trim(),
+        univDepartment: participant.univDepartment ?? null,
+        univJoinedYear: participant.univJoinedYear ?? null,
+        sortOrder: participant.sortOrder ?? index,
+      }));
+    if (participants.length > 0) {
+      await tx.cloudProductParticipant.createMany({ data: participants });
+    }
+
+    const relatedServices = (input.relatedServices ?? [])
+      .filter((service) => service.pageTitle?.trim())
+      .map((service, index) => ({
+        cloudProductId: productId,
+        pageTitle: service.pageTitle.trim(),
+        thumbnailUrl: service.thumbnailUrl ?? null,
+        serviceLink: service.serviceLink ?? null,
+        sortOrder: service.sortOrder ?? index,
+      }));
+    if (relatedServices.length > 0) {
+      await tx.cloudProductRelatedService.createMany({ data: relatedServices });
     }
   }
 

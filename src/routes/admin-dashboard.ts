@@ -337,6 +337,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       <button data-tab="activityTerms" data-loader="loadActivityTerms">활동기수</button>
       <button data-tab="crews" data-loader="loadCrews">크루 관리</button>
       <button data-tab="projects" data-loader="loadProjects">프로젝트 관리</button>
+      <button data-tab="cloudProducts" data-loader="loadCloudProducts">제품 관리</button>
       <button data-tab="blogs" data-loader="loadBlogs">블로그 관리</button>
     </nav>
     <section>
@@ -455,6 +456,38 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
           <div class="card"><div class="content" id="blogDetail"></div></div>
         </div>
       </div>
+
+      <div id="cloudProducts" class="tab hidden">
+        <div class="page-head">
+          <div>
+            <h2>제품 관리</h2>
+            <div class="page-subtitle">클라우드 제품 공개 정보와 연결 프로젝트, 참여자, 관련 서비스를 관리합니다.</div>
+          </div>
+          <div class="toolbar">
+            <div id="cloudProductBulkToolbar" class="toolbar hidden" style="margin:0">
+              <span id="cloudProductBulkStatus" class="badge"></span>
+              <button id="bulkShowCloudProducts">선택대상 일괄공개</button>
+              <button id="bulkHideCloudProducts">선택대상 일괄비공개</button>
+            </div>
+            <input id="cloudProductSearch" style="width:280px" placeholder="제품명, 카테고리, 프로젝트명 검색" />
+            <button id="newCloudProduct" class="primary">제품 등록</button>
+            <button id="refreshCloudProducts">새로고침</button>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <div class="card-head">
+              <div class="toolbar" style="margin:0">
+                <input id="cloudProductBulkAll" type="checkbox" title="전체 선택" />
+                <h3>제품 목록</h3>
+              </div>
+              <span id="cloudProductStatus" class="status"></span>
+            </div>
+            <div class="list" id="cloudProductList"></div>
+          </div>
+          <div class="card"><div class="content" id="cloudProductDetail"></div></div>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -464,6 +497,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       activityTerms: [],
       crews: [],
       projects: [],
+      cloudProducts: [],
       blogs: [],
     };
     const $ = (id) => document.getElementById(id);
@@ -554,7 +588,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       try {
         const result = await api('/admin/sync/notion', { method: 'POST' });
         $('syncOutput').textContent = JSON.stringify(result, null, 2);
-        await Promise.all([loadActivityTerms(), loadCrews(), loadProjects(), loadBlogs()]);
+        await Promise.all([loadActivityTerms(), loadCrews(), loadProjects(), loadCloudProducts(), loadBlogs()]);
       } catch (error) {
         $('syncOutput').textContent = error.message;
       }
@@ -721,6 +755,81 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       };
     }
 
+    async function loadCloudProducts() {
+      setStatus('cloudProductStatus', '불러오는 중...');
+      try {
+        state.cloudProducts = (await api('/admin/cloud-products')).data;
+        await ensureProjectsData();
+        renderCloudProductList();
+      } catch (error) {
+        setStatus('cloudProductStatus', error.message, true);
+      }
+    }
+    function renderCloudProductList() {
+      const products = state.cloudProducts.filter(matchesCloudProductSearch);
+      $('cloudProductList').innerHTML = products.length
+        ? products.map((product) => selectableRowHtml('cloudProductBulk', product.id, product.productName, cloudProductMeta(product), visibilityBadge(product.isVisible))).join('')
+        : emptyHtml(state.cloudProducts.length ? '검색 결과가 없습니다.' : '등록된 제품이 없습니다.');
+      $('cloudProductList').querySelectorAll('button').forEach((button) => button.addEventListener('click', () => showCloudProduct(button.dataset.id)));
+      bindBulkSelection('cloudProductBulk', 'cloudProductBulkToolbar', 'cloudProductBulkStatus');
+      setStatus('cloudProductStatus', products.length + '개');
+    }
+    async function showCloudProduct(id) {
+      const product = id === 'new'
+        ? emptyCloudProduct()
+        : (await api('/admin/cloud-products/' + id)).data;
+      await Promise.all([ensureProjectsData(), ensureCrewsData()]);
+      const isNew = id === 'new';
+      $('cloudProductDetail').innerHTML = '<h2>' + (isNew ? '제품 등록' : esc(product.productName)) + '</h2>'
+        + '<label class="inline"><input id="cloudProductVisible" type="checkbox" ' + (product.isVisible ? 'checked' : '') + '> 공개 제품 사용</label>'
+        + '<label>카테고리 코드</label><input id="cloudProductCategoryCode" placeholder="CAT_PLATFORM" value="' + esc(product.categoryCode || product.category?.code || '') + '">'
+        + '<label>카테고리명</label><input id="cloudProductCategoryTitle" placeholder="플랫폼" value="' + esc(product.category?.categoryTitle || '') + '">'
+        + '<label>카테고리 이미지 URL</label><input id="cloudProductCategoryImage" value="' + esc(product.category?.categoryImageUrl || '') + '">'
+        + '<label>제품명</label><input id="cloudProductName" value="' + esc(product.productName || '') + '">'
+        + '<label>제품 아이콘 URL</label><input id="cloudProductIcon" value="' + esc(product.productIconUrl || '') + '">'
+        + '<label>클라우드 링크</label><input id="cloudProductCloudLink" value="' + esc(product.cloudLink || '') + '">'
+        + '<label>연결 프로젝트</label><select id="cloudProductProject"><option value="">연결 안 함</option>' + projectOptionsHtml(product.projectSourceId || '') + '</select>'
+        + '<label>정렬순서</label><input id="cloudProductSortOrder" inputmode="numeric" value="' + esc(product.sortOrder ?? 0) + '">'
+        + '<label>목록 설명</label><textarea id="cloudProductDescription">' + esc(product.description || '') + '</textarea>'
+        + '<label>상세 본문</label><textarea id="cloudProductContent">' + esc(product.content || '') + '</textarea>'
+        + '<div class="toolbar"><button id="saveCloudProduct" class="primary">' + (isNew ? '제품 등록' : '제품 저장') + '</button>' + (isNew ? '' : '<button id="deleteCloudProduct">삭제</button>') + '</div>'
+        + '<h3>참여자</h3><div class="meta">연결 프로젝트를 선택하면 해당 프로젝트 참여자가 기본값으로 채워집니다. 기본값으로 들어온 참여자도 삭제할 수 있습니다.</div>'
+        + '<div class="toolbar"><select id="cloudProductCrewPicker" style="width:280px"><option value="">크루 선택</option>' + crewOptionsHtml() + '</select><button id="addCloudProductCrew">크루 추가</button><button id="addManualCloudProductParticipant">수기입력</button></div>'
+        + '<div id="cloudProductParticipants">' + ((product.participants || []).length ? product.participants.map(cloudProductParticipantRowHtml).join('') : emptyHtml('참여자를 추가하세요.')) + '</div>'
+        + '<h3>관련 서비스</h3><div id="cloudProductRelatedServices">' + ((product.relatedServices || []).length ? product.relatedServices.map(cloudProductRelatedServiceRowHtml).join('') : cloudProductRelatedServiceRowHtml({})) + '</div>'
+        + '<div class="toolbar"><button id="addCloudProductRelatedService">관련 서비스 추가</button></div>';
+      bindCloudProductParticipantControls();
+      $('cloudProductProject').onchange = () => {
+        setCloudProductParticipants(projectDefaultParticipants($('cloudProductProject').value));
+      };
+      $('saveCloudProduct').onclick = async () => {
+        const payload = collectCloudProductPayload();
+        const path = isNew ? '/admin/cloud-products' : '/admin/cloud-products/' + id;
+        await api(path, { method: isNew ? 'POST' : 'PUT', body: JSON.stringify(payload) });
+        await loadCloudProducts();
+        $('cloudProductDetail').innerHTML = emptyHtml(isNew ? '제품이 등록되었습니다.' : '제품이 저장되었습니다.');
+      };
+      if (!isNew) {
+        $('deleteCloudProduct').onclick = async () => {
+          if (!confirm('이 제품을 삭제할까요?')) return;
+          await api('/admin/cloud-products/' + id, { method: 'DELETE' });
+          await loadCloudProducts();
+          $('cloudProductDetail').innerHTML = emptyHtml('제품이 삭제되었습니다.');
+        };
+      }
+      $('addCloudProductCrew').onclick = () => {
+        const crew = state.crews.find((item) => item.id === $('cloudProductCrewPicker').value);
+        if (!crew) return;
+        appendCloudProductParticipant(crewToCloudProductParticipant(crew));
+      };
+      $('addManualCloudProductParticipant').onclick = () => {
+        appendCloudProductParticipant({});
+      };
+      $('addCloudProductRelatedService').onclick = () => {
+        $('cloudProductRelatedServices').insertAdjacentHTML('beforeend', cloudProductRelatedServiceRowHtml({}));
+      };
+    }
+
     async function loadBlogs() {
       setStatus('blogStatus', '불러오는 중...');
       try {
@@ -805,6 +914,91 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         + '<input data-field="endedAt" placeholder="종료 기수" value="' + esc(item.endedAt || '') + '">'
         + '</div>';
     }
+    function cloudProductParticipantRowHtml(item) {
+      const sourceLabel = item.crewSourceId ? '크루' : '수기';
+      return '<div class="form-row cloud-product-participant-row">'
+        + '<input data-field="crewPublicId" inputmode="numeric" placeholder="공개 crewId" value="' + esc(item.crewPublicId ?? '') + '">'
+        + '<input data-field="crewName" placeholder="이름" value="' + esc(item.crewName || '') + '">'
+        + '<input data-field="profileUrl" placeholder="프로필 이미지 URL" value="' + esc(item.profileUrl || '') + '">'
+        + '<input data-field="univDepartment" placeholder="학과" value="' + esc(item.univDepartment || '') + '">'
+        + '<input data-field="univJoinedYear" placeholder="학번/입학년도" value="' + esc(item.univJoinedYear || '') + '">'
+        + '<input data-field="crewSourceId" placeholder="CrewSource ID(선택)" value="' + esc(item.crewSourceId || '') + '">'
+        + '<button type="button" class="ghost" data-remove-participant="true">' + sourceLabel + ' 삭제</button>'
+        + '</div>';
+    }
+    function cloudProductRelatedServiceRowHtml(item) {
+      return '<div class="form-row cloud-product-related-service-row">'
+        + '<input data-field="pageTitle" placeholder="서비스명" value="' + esc(item.pageTitle || '') + '">'
+        + '<input data-field="thumbnailUrl" placeholder="썸네일 URL" value="' + esc(item.thumbnailUrl || '') + '">'
+        + '<input data-field="serviceLink" placeholder="서비스 링크" value="' + esc(item.serviceLink || '') + '">'
+        + '</div>';
+    }
+    function projectOptionsHtml(selectedId) {
+      return state.projects.map((project) =>
+        '<option value="' + esc(project.id) + '" ' + (project.id === selectedId ? 'selected' : '') + '>' + esc(project.titleKo || project.id) + '</option>'
+      ).join('');
+    }
+    function crewOptionsHtml() {
+      return state.crews.map((crew) =>
+        '<option value="' + esc(crew.id) + '">' + esc(crew.name || crew.id) + '</option>'
+      ).join('');
+    }
+    function appendCloudProductParticipant(item) {
+      const container = $('cloudProductParticipants');
+      if (!container.querySelector('.cloud-product-participant-row')) {
+        container.innerHTML = '';
+      }
+      container.insertAdjacentHTML('beforeend', cloudProductParticipantRowHtml(item));
+      bindCloudProductParticipantControls();
+    }
+    function setCloudProductParticipants(items) {
+      $('cloudProductParticipants').innerHTML = items.length
+        ? items.map(cloudProductParticipantRowHtml).join('')
+        : emptyHtml('참여자를 추가하세요.');
+      bindCloudProductParticipantControls();
+    }
+    function bindCloudProductParticipantControls() {
+      document.querySelectorAll('[data-remove-participant="true"]').forEach((button) => {
+        button.onclick = () => {
+          button.closest('.cloud-product-participant-row')?.remove();
+          if (!$('cloudProductParticipants').querySelector('.cloud-product-participant-row')) {
+            $('cloudProductParticipants').innerHTML = emptyHtml('참여자를 추가하세요.');
+          }
+        };
+      });
+    }
+    function projectDefaultParticipants(projectId) {
+      const project = state.projects.find((item) => item.id === projectId);
+      if (!project) return [];
+      return state.crews
+        .filter((crew) => resolveProjectParticipantIds(project, state.crews).has(crew.id))
+        .map(crewToCloudProductParticipant);
+    }
+    function crewToCloudProductParticipant(crew) {
+      return {
+        crewSourceId: crew.id,
+        crewName: crew.name || '',
+        profileUrl: crew.profileImageUrl || '',
+        univDepartment: '',
+        univJoinedYear: crew.joinedGen ? String(crew.joinedGen) : '',
+      };
+    }
+    function emptyCloudProduct() {
+      return {
+        isVisible: false,
+        categoryCode: '',
+        category: null,
+        projectSourceId: '',
+        productName: '',
+        productIconUrl: '',
+        cloudLink: '',
+        sortOrder: 0,
+        description: '',
+        content: '',
+        participants: [],
+        relatedServices: [],
+      };
+    }
     function collectCrewTermTeams() {
       return Array.from(document.querySelectorAll('.term-row')).map((row) => ({
         generation: Number(row.querySelector('[data-field="generation"]').value),
@@ -819,6 +1013,42 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         endedAt: emptyToNull(row.querySelector('[data-field="endedAt"]').value),
         sortOrder: index,
       })).filter((item) => item.startedAt);
+    }
+    function collectCloudProductPayload() {
+      return {
+        isVisible: $('cloudProductVisible').checked,
+        categoryCode: $('cloudProductCategoryCode').value.trim(),
+        categoryTitle: $('cloudProductCategoryTitle').value.trim(),
+        categoryImageUrl: emptyToNull($('cloudProductCategoryImage').value),
+        projectSourceId: emptyToNull($('cloudProductProject').value),
+        productIconUrl: emptyToNull($('cloudProductIcon').value),
+        productName: $('cloudProductName').value.trim(),
+        description: $('cloudProductDescription').value.trim(),
+        cloudLink: emptyToNull($('cloudProductCloudLink').value),
+        content: $('cloudProductContent').value.trim(),
+        sortOrder: Number($('cloudProductSortOrder').value || 0),
+        participants: collectCloudProductParticipants(),
+        relatedServices: collectCloudProductRelatedServices(),
+      };
+    }
+    function collectCloudProductParticipants() {
+      return Array.from(document.querySelectorAll('.cloud-product-participant-row')).map((row, index) => ({
+        crewPublicId: numberOrNull(row.querySelector('[data-field="crewPublicId"]').value),
+        crewName: row.querySelector('[data-field="crewName"]').value.trim(),
+        profileUrl: emptyToNull(row.querySelector('[data-field="profileUrl"]').value),
+        univDepartment: emptyToNull(row.querySelector('[data-field="univDepartment"]').value),
+        univJoinedYear: emptyToNull(row.querySelector('[data-field="univJoinedYear"]').value),
+        crewSourceId: emptyToNull(row.querySelector('[data-field="crewSourceId"]').value),
+        sortOrder: index,
+      })).filter((item) => item.crewName);
+    }
+    function collectCloudProductRelatedServices() {
+      return Array.from(document.querySelectorAll('.cloud-product-related-service-row')).map((row, index) => ({
+        pageTitle: row.querySelector('[data-field="pageTitle"]').value.trim(),
+        thumbnailUrl: emptyToNull(row.querySelector('[data-field="thumbnailUrl"]').value),
+        serviceLink: emptyToNull(row.querySelector('[data-field="serviceLink"]').value),
+        sortOrder: index,
+      })).filter((item) => item.pageTitle);
     }
     function collectCheckedItems(name, idField) {
       return Array.from(document.querySelectorAll('input[name="' + name + '"]')).map((input, index) => ({
@@ -869,7 +1099,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       });
     }
     function syncBulkAllCheckbox(name) {
-      const checkboxId = name === 'crewBulk' ? 'crewBulkAll' : name === 'projectBulk' ? 'projectBulkAll' : '';
+      const checkboxId = name === 'crewBulk' ? 'crewBulkAll' : name === 'projectBulk' ? 'projectBulkAll' : name === 'cloudProductBulk' ? 'cloudProductBulkAll' : '';
       if (!checkboxId || !$(checkboxId)) return;
       const inputs = Array.from(document.querySelectorAll('input[name="' + name + '"]'));
       const checkedCount = inputs.filter((input) => input.checked).length;
@@ -911,6 +1141,17 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       if (!query) return true;
       return containsSearch([blog.title, blog.projectName, ...blogAuthorNames(blog)], query);
     }
+    function matchesCloudProductSearch(product) {
+      const query = normalizeSearch($('cloudProductSearch').value);
+      if (!query) return true;
+      return containsSearch([
+        product.productName,
+        product.categoryCode,
+        product.category?.categoryTitle,
+        product.projectSource?.titleKo,
+        product.projectSource?.titleEn,
+      ], query);
+    }
     function crewMeta(crew) {
       const generations = [...new Set([...(crew.termTeamOverrides || []), ...(crew.termTeamSources || [])].map((item) => item.generation).filter(Boolean))].sort((a, b) => a - b);
       return generations.length ? generations.map((item) => item + '기').join(', ') : '기수 정보 없음';
@@ -925,6 +1166,13 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         formatDateTime(blog.recordedAt),
         blogAuthorNames(blog).join(', ') || '작성자 미확인',
         blog.projectName || '프로젝트 미지정',
+      ].join(' · ');
+    }
+    function cloudProductMeta(product) {
+      return [
+        product.category?.categoryTitle || product.categoryCode || '카테고리 미지정',
+        product.projectSource?.titleKo || '연결 프로젝트 없음',
+        'publicId ' + product.publicId,
       ].join(' · ');
     }
     function blogsForProject(project) {
@@ -994,25 +1242,36 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     }
     function emptyToNull(value) { return value.trim() ? value : null; }
+    function numberOrNull(value) {
+      const parsed = Number(value);
+      return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    }
 
     window.loadSync = loadSync;
     window.loadActivityTerms = loadActivityTerms;
     window.loadCrews = loadCrews;
     window.loadProjects = loadProjects;
+    window.loadCloudProducts = loadCloudProducts;
     window.loadBlogs = loadBlogs;
     $('refreshActivityTerms').onclick = loadActivityTerms;
     $('refreshCrews').onclick = loadCrews;
     $('refreshProjects').onclick = loadProjects;
+    $('refreshCloudProducts').onclick = loadCloudProducts;
     $('refreshBlogs').onclick = loadBlogs;
+    $('newCloudProduct').onclick = () => showCloudProduct('new');
     $('crewSearch').addEventListener('input', renderCrewList);
     $('projectSearch').addEventListener('input', renderProjectList);
+    $('cloudProductSearch').addEventListener('input', renderCloudProductList);
     $('blogSearch').addEventListener('input', renderBlogList);
     bindBulkAllCheckbox('crewBulkAll', 'crewBulk', 'crewBulkToolbar', 'crewBulkStatus');
     bindBulkAllCheckbox('projectBulkAll', 'projectBulk', 'projectBulkToolbar', 'projectBulkStatus');
+    bindBulkAllCheckbox('cloudProductBulkAll', 'cloudProductBulk', 'cloudProductBulkToolbar', 'cloudProductBulkStatus');
     $('bulkShowCrews').onclick = () => updateSelectedVisibility('crewBulk', '/admin/crews', true, loadCrews);
     $('bulkHideCrews').onclick = () => updateSelectedVisibility('crewBulk', '/admin/crews', false, loadCrews);
     $('bulkShowProjects').onclick = () => updateSelectedVisibility('projectBulk', '/admin/projects', true, loadProjects);
     $('bulkHideProjects').onclick = () => updateSelectedVisibility('projectBulk', '/admin/projects', false, loadProjects);
+    $('bulkShowCloudProducts').onclick = () => updateSelectedVisibility('cloudProductBulk', '/admin/cloud-products', true, loadCloudProducts);
+    $('bulkHideCloudProducts').onclick = () => updateSelectedVisibility('cloudProductBulk', '/admin/cloud-products', false, loadCloudProducts);
     boot();
   </script>
 </body>
