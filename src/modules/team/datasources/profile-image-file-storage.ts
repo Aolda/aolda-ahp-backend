@@ -3,6 +3,7 @@ import { mkdir, rename, writeFile } from 'fs/promises';
 import { basename, extname, join } from 'path';
 
 const DEFAULT_EXTENSION = '.bin';
+const DEFAULT_DOWNLOAD_TIMEOUT_MS = 10_000;
 const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -24,10 +25,11 @@ export class ProfileImageFileStorage {
   constructor(
     private readonly storageDir: string,
     private readonly publicBaseUrl: string,
+    private readonly downloadTimeoutMs = DEFAULT_DOWNLOAD_TIMEOUT_MS,
   ) {}
 
   async saveFromUrl(notionPageId: string, imageUrl: string): Promise<StoredProfileImage> {
-    const response = await fetch(imageUrl);
+    const response = await fetch(imageUrl, { signal: AbortSignal.timeout(this.downloadTimeoutMs) });
 
     if (!response.ok) {
       throw new Error(`Failed to download profile image: ${response.status} ${response.statusText}`);
