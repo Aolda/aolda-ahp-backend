@@ -2,7 +2,7 @@
   "services": [
     {
       "serviceId": "aolda-ahp-backend",
-      "image": "aolda/ahp_backend:9f65f4977ca50a27bcafe59dc563d59c570ae8c0373edc7c51f471fb54f2bf12",
+      "image": "aolda/ahp_backend:834281c4bdace0c2be4e36834e7b847b028be93e4e7fba5254e2b709fba59b7f",
       "port": 3000,
       "replicas": 1,
       "strategy": "Rollout"
