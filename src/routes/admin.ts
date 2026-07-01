@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { AdminAuthService, type AdminSessionUser } from '../modules/admin/services/admin-auth.service';
@@ -46,10 +48,20 @@ type BlogPublishState = {
   isVisible: boolean;
   publishedAt: string | null;
 };
+type BlogDraftJob = {
+  id: string;
+  blogId: string;
+  status: 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+  startedAt: string;
+  finishedAt: string | null;
+  errorMessage: string | null;
+  result: BlogPublishState | null;
+};
 
 const DEFAULT_BLOG_PROMPT =
   'Aolda 프로젝트 기록을 바탕으로 외부 공개용 블로그 초안을 작성하세요. 독자가 맥락을 쉽게 이해하도록 문제, 접근, 결과, 배운 점을 명확히 정리하세요.';
 const blogPublishStates = new Map<string, BlogPublishState>();
+const blogDraftJobs = new Map<string, BlogDraftJob>();
 
 export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps): Promise<void> {
   app.post(
@@ -393,7 +405,8 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
         return reply.code(404).send({ message: 'Blog source not found' });
       }
 
-      const draft = await generateBlogDraft(deps.aiBackend, {
+      const job = createBlogDraftJob(request.params.id);
+      void runBlogDraftJob(app, deps, job, {
         title: blog.title,
         projectName: blog.projectName,
         url: blog.url,
@@ -402,10 +415,23 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
         defaultPrompt: await getBlogDefaultPrompt(contentService),
         customPrompt: request.body.customPrompt?.trim() ?? '',
       });
-      const state = getBlogPublishState(request.params.id);
-      state.draft = draft;
-      blogPublishStates.set(request.params.id, state);
-      return { data: state };
+
+      return reply.code(202).send({ data: getBlogPublishState(request.params.id), job });
+    },
+  );
+
+  app.get(
+    '/admin/blogs/:id/draft-jobs/:jobId',
+    {
+      preHandler: createAdminAuthPreHandler(deps),
+      schema: { tags: ['admin'], summary: '블로깅 공개 초안 생성 작업 조회' } as any,
+    },
+    async (request: FastifyRequest<{ Params: IdParams & { jobId: string } }>, reply) => {
+      const job = blogDraftJobs.get(request.params.jobId);
+      if (!job || job.blogId !== request.params.id) {
+        return reply.code(404).send({ message: 'Draft job not found' });
+      }
+      return { job };
     },
   );
 
@@ -631,6 +657,52 @@ function getBlogPublishState(blogId: string): BlogPublishState {
   );
 }
 
+function createBlogDraftJob(blogId: string): BlogDraftJob {
+  const job: BlogDraftJob = {
+    id: randomUUID(),
+    blogId,
+    status: 'RUNNING',
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    errorMessage: null,
+    result: null,
+  };
+  blogDraftJobs.set(job.id, job);
+  return job;
+}
+
+async function runBlogDraftJob(
+  app: FastifyInstance,
+  deps: AdminRouteDeps,
+  job: BlogDraftJob,
+  input: Parameters<typeof generateBlogDraft>[1],
+): Promise<void> {
+  try {
+    const draft = await generateBlogDraft(deps.aiBackend, input);
+    const state = getBlogPublishState(job.blogId);
+    state.draft = draft;
+    blogPublishStates.set(job.blogId, state);
+    job.status = 'SUCCEEDED';
+    job.result = state;
+  } catch (error) {
+    const message = formatAiDraftError(error);
+    job.status = 'FAILED';
+    job.errorMessage = message;
+    app.log.error(
+      {
+        err: error,
+        blogId: job.blogId,
+        jobId: job.id,
+        aiEndpoint: describeAiEndpoint(deps.aiBackend?.baseUrl),
+      },
+      'Blog draft generation failed',
+    );
+  } finally {
+    job.finishedAt = new Date().toISOString();
+    blogDraftJobs.set(job.id, job);
+  }
+}
+
 async function getBlogDefaultPrompt(contentService: AdminContentService): Promise<string> {
   return (
     (await contentService.getSetting(BLOG_AI_DEFAULT_PROMPT_SETTING_KEY)) ?? DEFAULT_BLOG_PROMPT
@@ -683,34 +755,105 @@ async function generateBlogDraft(
     ].join('\n');
   }
 
-  const endpoint = `${aiBackend.baseUrl.replace(/\/$/, '')}/chat/completions`;
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${aiBackend.apiKey}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: aiBackend.model,
-      messages: [
-        { role: 'system', content: 'You write polished Korean public blog drafts for Aolda.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.7,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`AI backend request failed: ${response.status}`);
+  const endpoint = buildChatCompletionsEndpoint(aiBackend.baseUrl);
+  let response: Response;
+  try {
+    response = await fetch(endpoint.url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${aiBackend.apiKey}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: aiBackend.model,
+        messages: [
+          { role: 'system', content: 'You write polished Korean public blog drafts for Aolda.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch (error) {
+    throw new Error(`AI backend connection failed (${endpoint.label}): ${formatFetchFailure(error)}`);
   }
 
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
+  if (!response.ok) {
+    throw new Error(
+      `AI backend request failed (${endpoint.label}): HTTP ${response.status} ${response.statusText}. ${await readResponseSnippet(response)}`,
+    );
+  }
+
+  const data = await readAiJsonResponse(response, endpoint.label);
   const draft = data.choices?.[0]?.message?.content?.trim();
   if (!draft) {
-    throw new Error('AI backend returned an empty draft');
+    throw new Error(`AI backend returned an empty draft (${endpoint.label})`);
   }
 
   return draft;
+}
+
+function buildChatCompletionsEndpoint(baseUrl: string): { url: string; label: string } {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new Error('AI backend base URL is invalid. Check AI_BACKEND_BASE_URL.');
+  }
+
+  const normalizedPath = url.pathname.replace(/\/+$/, '');
+  if (!normalizedPath.endsWith('/chat/completions')) {
+    url.pathname = `${normalizedPath}/chat/completions`.replace(/\/{2,}/g, '/');
+  }
+
+  return {
+    url: url.toString(),
+    label: `${url.protocol}//${url.host}${url.pathname}`,
+  };
+}
+
+function describeAiEndpoint(baseUrl: string | undefined): string {
+  if (!baseUrl) return '<unset>';
+  try {
+    return buildChatCompletionsEndpoint(baseUrl).label;
+  } catch {
+    return '<invalid-url>';
+  }
+}
+
+function formatFetchFailure(error: unknown): string {
+  if (error instanceof DOMException && error.name === 'TimeoutError') {
+    return 'request timed out after 120s';
+  }
+  if (error instanceof Error) {
+    const causeValue = (error as Error & { cause?: unknown }).cause;
+    const cause = causeValue instanceof Error ? `; cause=${causeValue.message}` : '';
+    return `${error.message}${cause}`;
+  }
+  return 'unknown network error';
+}
+
+async function readResponseSnippet(response: Response): Promise<string> {
+  const text = await response.text().catch(() => '');
+  if (!text) return 'No response body was returned.';
+  return text.replace(/\s+/g, ' ').trim().slice(0, 500);
+}
+
+async function readAiJsonResponse(
+  response: Response,
+  endpointLabel: string,
+): Promise<{ choices?: Array<{ message?: { content?: string } }> }> {
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }> };
+  } catch {
+    throw new Error(
+      `AI backend returned non-JSON response (${endpointLabel}): ${text.replace(/\s+/g, ' ').trim().slice(0, 500)}`,
+    );
+  }
+}
+
+function formatAiDraftError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return 'Unknown AI draft generation error';
 }

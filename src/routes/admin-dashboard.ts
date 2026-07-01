@@ -938,7 +938,12 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       if (options.body && !headers['content-type']) {
         headers['content-type'] = 'application/json';
       }
-      const res = await fetch(path, { ...options, headers });
+      let res;
+      try {
+        res = await fetch(path, { ...options, headers });
+      } catch (error) {
+        throw new Error('요청을 서버로 전송하지 못했습니다: ' + (error?.message || '네트워크 오류'));
+      }
       const text = await res.text();
       const contentType = res.headers.get('content-type') || '';
       let data = null;
@@ -1546,20 +1551,22 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         };
       }
       $('generateBlogDraft').onclick = async () => {
-        setStatus('blogDraftStatus', '생성 중...');
+        const button = $('generateBlogDraft');
+        button.disabled = true;
+        setStatus('blogDraftStatus', '생성 작업을 시작하는 중...');
         try {
           const result = await api('/admin/blogs/' + blog.id + '/draft', {
             method: 'POST',
             body: JSON.stringify({ customPrompt: $('blogCustomPrompt').value }),
           });
-          state.blogPublishStates[blog.id] = result.data;
-          $('blogDraftPromptPanel').classList.add('hidden');
-          $('blogDraftEditor').classList.remove('hidden');
-          $('blogDraftContent').value = result.data.draft || '';
-          setStatus('blogDraftStatus', '');
-          notify('초안 생성 완료', blog.title);
+          setStatus('blogDraftStatus', '백그라운드 생성 중...');
+          notify('초안 생성 시작', '완료되면 알림으로 안내합니다.');
+          await pollBlogDraftJob(blog, result.job.id);
         } catch (error) {
           setStatus('blogDraftStatus', error.message, true);
+          notify('초안 생성 실패', error.message, 'danger');
+        } finally {
+          button.disabled = false;
         }
       };
       $('publishBlogDraft').onclick = async () => {
@@ -1583,6 +1590,38 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         });
         notify($('blogPublishVisible').checked ? '공개 전환 완료' : '비공개 전환 완료', blog.title);
       };
+    }
+    async function pollBlogDraftJob(blog, jobId) {
+      for (;;) {
+        await delay(2500);
+        const result = await api('/admin/blogs/' + blog.id + '/draft-jobs/' + encodeURIComponent(jobId));
+        const job = result.job;
+        if (job.status === 'RUNNING') {
+          setStatus('blogDraftStatus', '백그라운드 생성 중... ' + elapsedSeconds(job.startedAt) + '초 경과');
+          continue;
+        }
+        if (job.status === 'SUCCEEDED') {
+          state.blogPublishStates[blog.id] = job.result;
+          $('blogDraftPromptPanel').classList.add('hidden');
+          $('blogDraftEditor').classList.remove('hidden');
+          $('blogDraftContent').value = job.result?.draft || '';
+          setStatus('blogDraftStatus', '');
+          notify('초안 생성 완료', blog.title);
+          return;
+        }
+        const message = job.errorMessage || '알 수 없는 오류로 초안 생성에 실패했습니다.';
+        setStatus('blogDraftStatus', message, true);
+        notify('초안 생성 실패', message, 'danger');
+        return;
+      }
+    }
+    function delay(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+    function elapsedSeconds(startedAt) {
+      const started = new Date(startedAt).getTime();
+      if (!Number.isFinite(started)) return '0';
+      return Math.max(0, Math.round((Date.now() - started) / 1000));
     }
 
     function activityTermRowHtml(item) {
