@@ -182,6 +182,7 @@ model BlogPostSource {
 
   crewVisibilities   CrewBlogVisibility[]
   featuredInProjects ProjectFeaturedBlog[]
+  draftJobs          AdminBlogDraftJob[]
 }
 
 model AdminSetting {
@@ -189,6 +190,23 @@ model AdminSetting {
   value     String   @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AdminBlogDraftJob {
+  id               String    @id @default(uuid())
+  blogPostSourceId String
+  status           String
+  draft            String?   @db.Text
+  errorMessage     String?   @db.Text
+  startedAt        DateTime  @default(now())
+  finishedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  blogPostSource BlogPostSource @relation(fields: [blogPostSourceId], references: [id], onDelete: Cascade)
+
+  @@index([blogPostSourceId])
+  @@index([status])
 }
 
 model CrewProjectVisibility {

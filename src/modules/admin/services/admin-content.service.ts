@@ -82,6 +82,7 @@ export interface UpsertCloudProductInput {
 }
 
 export const BLOG_AI_DEFAULT_PROMPT_SETTING_KEY = 'blog.ai.defaultPrompt';
+export type AdminBlogDraftJobStatus = 'RUNNING' | 'SUCCEEDED' | 'FAILED';
 
 export class AdminContentService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -102,6 +103,44 @@ export class AdminContentService {
       select: { value: true },
     });
     return setting.value;
+  }
+
+  async createBlogDraftJob(blogPostSourceId: string) {
+    return this.prisma.adminBlogDraftJob.create({
+      data: {
+        blogPostSourceId,
+        status: 'RUNNING',
+      },
+    });
+  }
+
+  async getBlogDraftJob(id: string) {
+    return this.prisma.adminBlogDraftJob.findUnique({
+      where: { id },
+    });
+  }
+
+  async completeBlogDraftJob(id: string, draft: string) {
+    return this.prisma.adminBlogDraftJob.update({
+      where: { id },
+      data: {
+        status: 'SUCCEEDED',
+        draft,
+        errorMessage: null,
+        finishedAt: new Date(),
+      },
+    });
+  }
+
+  async failBlogDraftJob(id: string, errorMessage: string) {
+    return this.prisma.adminBlogDraftJob.update({
+      where: { id },
+      data: {
+        status: 'FAILED',
+        errorMessage,
+        finishedAt: new Date(),
+      },
+    });
   }
 
   async listActivityTerms() {

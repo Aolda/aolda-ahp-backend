@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { AdminAuthService, type AdminSessionUser } from '../modules/admin/services/admin-auth.service';
@@ -61,7 +59,6 @@ type BlogDraftJob = {
 const DEFAULT_BLOG_PROMPT =
   'Aolda 프로젝트 기록을 바탕으로 외부 공개용 블로그 초안을 작성하세요. 독자가 맥락을 쉽게 이해하도록 문제, 접근, 결과, 배운 점을 명확히 정리하세요.';
 const blogPublishStates = new Map<string, BlogPublishState>();
-const blogDraftJobs = new Map<string, BlogDraftJob>();
 
 export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps): Promise<void> {
   app.post(
@@ -405,8 +402,8 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
         return reply.code(404).send({ message: 'Blog source not found' });
       }
 
-      const job = createBlogDraftJob(request.params.id);
-      void runBlogDraftJob(app, deps, job, {
+      const job = await contentService.createBlogDraftJob(request.params.id);
+      void runBlogDraftJob(app, deps, contentService, job.id, request.params.id, {
         title: blog.title,
         projectName: blog.projectName,
         url: blog.url,
@@ -416,7 +413,9 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
         customPrompt: request.body.customPrompt?.trim() ?? '',
       });
 
-      return reply.code(202).send({ data: getBlogPublishState(request.params.id), job });
+      return reply
+        .code(202)
+        .send({ data: getBlogPublishState(request.params.id), job: serializeBlogDraftJob(job) });
     },
   );
 
@@ -427,11 +426,13 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
       schema: { tags: ['admin'], summary: '블로깅 공개 초안 생성 작업 조회' } as any,
     },
     async (request: FastifyRequest<{ Params: IdParams & { jobId: string } }>, reply) => {
-      const job = blogDraftJobs.get(request.params.jobId);
-      if (!job || job.blogId !== request.params.id) {
+      const contentService = getContentService(deps, reply);
+      if (!contentService) return undefined;
+      const job = await contentService.getBlogDraftJob(request.params.jobId);
+      if (!job || job.blogPostSourceId !== request.params.id) {
         return reply.code(404).send({ message: 'Draft job not found' });
       }
-      return { job };
+      return { job: serializeBlogDraftJob(job) };
     },
   );
 
@@ -657,50 +658,65 @@ function getBlogPublishState(blogId: string): BlogPublishState {
   );
 }
 
-function createBlogDraftJob(blogId: string): BlogDraftJob {
-  const job: BlogDraftJob = {
-    id: randomUUID(),
-    blogId,
-    status: 'RUNNING',
-    startedAt: new Date().toISOString(),
-    finishedAt: null,
-    errorMessage: null,
-    result: null,
-  };
-  blogDraftJobs.set(job.id, job);
-  return job;
-}
-
 async function runBlogDraftJob(
   app: FastifyInstance,
   deps: AdminRouteDeps,
-  job: BlogDraftJob,
+  contentService: AdminContentService,
+  jobId: string,
+  blogId: string,
   input: Parameters<typeof generateBlogDraft>[1],
 ): Promise<void> {
   try {
     const draft = await generateBlogDraft(deps.aiBackend, input);
-    const state = getBlogPublishState(job.blogId);
+    const state = getBlogPublishState(blogId);
     state.draft = draft;
-    blogPublishStates.set(job.blogId, state);
-    job.status = 'SUCCEEDED';
-    job.result = state;
+    blogPublishStates.set(blogId, state);
+    await contentService.completeBlogDraftJob(jobId, draft);
   } catch (error) {
     const message = formatAiDraftError(error);
-    job.status = 'FAILED';
-    job.errorMessage = message;
+    await contentService.failBlogDraftJob(jobId, message).catch((updateError) => {
+      app.log.error({ err: updateError, jobId }, 'Blog draft job failure state could not be saved');
+    });
     app.log.error(
       {
         err: error,
-        blogId: job.blogId,
-        jobId: job.id,
+        blogId,
+        jobId,
         aiEndpoint: describeAiEndpoint(deps.aiBackend?.baseUrl),
       },
       'Blog draft generation failed',
     );
-  } finally {
-    job.finishedAt = new Date().toISOString();
-    blogDraftJobs.set(job.id, job);
   }
+}
+
+function serializeBlogDraftJob(job: {
+  id: string;
+  blogPostSourceId: string;
+  status: string;
+  draft: string | null;
+  errorMessage: string | null;
+  startedAt: Date;
+  finishedAt: Date | null;
+}): BlogDraftJob {
+  return {
+    id: job.id,
+    blogId: job.blogPostSourceId,
+    status: normalizeBlogDraftJobStatus(job.status),
+    startedAt: job.startedAt.toISOString(),
+    finishedAt: job.finishedAt?.toISOString() ?? null,
+    errorMessage: job.errorMessage,
+    result: job.draft
+      ? {
+          ...getBlogPublishState(job.blogPostSourceId),
+          draft: job.draft,
+        }
+      : null,
+  };
+}
+
+function normalizeBlogDraftJobStatus(status: string): BlogDraftJob['status'] {
+  if (status === 'SUCCEEDED' || status === 'FAILED') return status;
+  return 'RUNNING';
 }
 
 async function getBlogDefaultPrompt(contentService: AdminContentService): Promise<string> {
