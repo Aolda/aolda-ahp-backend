@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AdminAuthService, type AdminSessionUser } from '../modules/admin/services/admin-auth.service';
 import {
   AdminContentService,
+  BLOG_AI_DEFAULT_PROMPT_SETTING_KEY,
   type UpsertCloudProductInput,
   type UpdateCrewAdminInput,
   type UpdateCrewBlogVisibilityInput,
@@ -48,7 +49,6 @@ type BlogPublishState = {
 
 const DEFAULT_BLOG_PROMPT =
   'Aolda 프로젝트 기록을 바탕으로 외부 공개용 블로그 초안을 작성하세요. 독자가 맥락을 쉽게 이해하도록 문제, 접근, 결과, 배운 점을 명확히 정리하세요.';
-let blogPrompt = DEFAULT_BLOG_PROMPT;
 const blogPublishStates = new Map<string, BlogPublishState>();
 
 export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps): Promise<void> {
@@ -330,13 +330,17 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
       preHandler: createAdminAuthPreHandler(deps),
       schema: { tags: ['admin'], summary: '블로깅 AI 설정 조회' } as any,
     },
-    async () => ({
-      data: {
-        defaultPrompt: blogPrompt,
-        model: deps.aiBackend?.model ?? 'mock',
-        isConfigured: Boolean(deps.aiBackend?.baseUrl && deps.aiBackend?.apiKey),
-      },
-    }),
+    async (_request, reply) => {
+      const contentService = getContentService(deps, reply);
+      if (!contentService) return undefined;
+      return {
+        data: {
+          defaultPrompt: await getBlogDefaultPrompt(contentService),
+          model: deps.aiBackend?.model ?? 'mock',
+          isConfigured: Boolean(deps.aiBackend?.baseUrl && deps.aiBackend?.apiKey),
+        },
+      };
+    },
   );
 
   app.put(
@@ -350,8 +354,13 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
       if (!nextPrompt) {
         return reply.code(400).send({ message: 'defaultPrompt is required' });
       }
-      blogPrompt = nextPrompt;
-      return { data: { defaultPrompt: blogPrompt } };
+      const contentService = getContentService(deps, reply);
+      if (!contentService) return undefined;
+      const defaultPrompt = await contentService.upsertSetting(
+        BLOG_AI_DEFAULT_PROMPT_SETTING_KEY,
+        nextPrompt,
+      );
+      return { data: { defaultPrompt } };
     },
   );
 
@@ -390,7 +399,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
         url: blog.url,
         recordedAt: blog.recordedAt?.toISOString() ?? null,
         body: blog.contentPreview,
-        defaultPrompt: blogPrompt,
+        defaultPrompt: await getBlogDefaultPrompt(contentService),
         customPrompt: request.body.customPrompt?.trim() ?? '',
       });
       const state = getBlogPublishState(request.params.id);
@@ -622,6 +631,12 @@ function getBlogPublishState(blogId: string): BlogPublishState {
   );
 }
 
+async function getBlogDefaultPrompt(contentService: AdminContentService): Promise<string> {
+  return (
+    (await contentService.getSetting(BLOG_AI_DEFAULT_PROMPT_SETTING_KEY)) ?? DEFAULT_BLOG_PROMPT
+  );
+}
+
 async function generateBlogDraft(
   aiBackend: AdminAiBackendConfig | undefined,
   input: {
@@ -634,16 +649,18 @@ async function generateBlogDraft(
     customPrompt: string;
   },
 ): Promise<string> {
+  const blogBody = input.body?.trim() || '본문 없음';
   const prompt = [
     input.defaultPrompt,
-    input.customPrompt ? `추가 요청: ${input.customPrompt}` : '',
     `제목: ${input.title}`,
     `프로젝트: ${input.projectName ?? '프로젝트 미지정'}`,
     `원문 URL: ${input.url ?? '없음'}`,
     `기록일: ${input.recordedAt ?? '없음'}`,
     '',
+    '아래 "블로깅 본문"은 Notion에서 동기화된 원문 Markdown입니다. 초안 작성 시 반드시 이 내용을 주요 근거로 사용하세요.',
     '블로깅 본문:',
-    input.body ?? '본문 없음',
+    blogBody,
+    input.customPrompt ? `추가 요청: ${input.customPrompt}` : '',
   ]
     .filter(Boolean)
     .join('\n');

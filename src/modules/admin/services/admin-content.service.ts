@@ -81,8 +81,28 @@ export interface UpsertCloudProductInput {
   relatedServices?: UpsertCloudProductRelatedServiceInput[];
 }
 
+export const BLOG_AI_DEFAULT_PROMPT_SETTING_KEY = 'blog.ai.defaultPrompt';
+
 export class AdminContentService {
   constructor(private readonly prisma: PrismaClient) {}
+
+  async getSetting(key: string): Promise<string | null> {
+    const setting = await this.prisma.adminSetting.findUnique({
+      where: { key },
+      select: { value: true },
+    });
+    return setting?.value ?? null;
+  }
+
+  async upsertSetting(key: string, value: string): Promise<string> {
+    const setting = await this.prisma.adminSetting.upsert({
+      where: { key },
+      create: { key, value },
+      update: { value },
+      select: { value: true },
+    });
+    return setting.value;
+  }
 
   async listActivityTerms() {
     const terms = await this.prisma.crewTermTeamSource.findMany({

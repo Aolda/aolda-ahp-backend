@@ -455,13 +455,21 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     }
     .markdown-preview h1,
     .markdown-preview h2,
-    .markdown-preview h3 {
+    .markdown-preview h3,
+    .markdown-preview h4,
+    .markdown-preview h5 {
       margin: 18px 0 8px;
     }
     .markdown-preview h1:first-child,
     .markdown-preview h2:first-child,
-    .markdown-preview h3:first-child {
+    .markdown-preview h3:first-child,
+    .markdown-preview h4:first-child,
+    .markdown-preview h5:first-child {
       margin-top: 0;
+    }
+    .markdown-preview h4,
+    .markdown-preview h5 {
+      font-size: 15px;
     }
     .markdown-preview p {
       margin: 8px 0;
@@ -1510,9 +1518,8 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         }
         html += closeMarkdownList(listType);
         listType = '';
-        if (line.startsWith('### ')) html += '<h3>' + esc(line.slice(4)) + '</h3>';
-        else if (line.startsWith('## ')) html += '<h2>' + esc(line.slice(3)) + '</h2>';
-        else if (line.startsWith('# ')) html += '<h1>' + esc(line.slice(2)) + '</h1>';
+        const heading = line.match(/^(#{1,5})\s+(.+)$/);
+        if (heading) html += '<h' + heading[1].length + '>' + esc(heading[2]) + '</h' + heading[1].length + '>';
         else if (line.startsWith('> ')) html += '<blockquote>' + esc(line.slice(2)) + '</blockquote>';
         else html += '<p>' + esc(line) + '</p>';
       }
