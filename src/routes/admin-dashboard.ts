@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { CREW_IMAGE_HTML, CREW_IMAGE_SCRIPT } from '../modules/admin/crew-image-refresh-ui';
 
 export async function registerAdminDashboardRoute(app: FastifyInstance): Promise<void> {
   app.get('/admin', async (_request, reply) => {
@@ -781,9 +782,11 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
               <span id="crewBulkStatus" class="badge"></span>
               <button id="bulkShowCrews">선택대상 일괄공개</button>
               <button id="bulkHideCrews">선택대상 일괄비공개</button>
+              <button id="bulkRefreshCrewImages">선택 이미지 새로고침</button>
             </div>
             <input id="crewSearch" style="width:260px" placeholder="크루명, 참여 프로젝트명 검색" />
             <button id="refreshCrews">새로고침</button>
+            <button id="crewImageLatest">이미지 갱신 현황</button>
           </div>
         </div>
         <div class="grid">
@@ -898,6 +901,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     </section>
   </main>
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
+  ${CREW_IMAGE_HTML}
 
   <script>
     const state = {
@@ -2086,6 +2090,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     $('bulkHideProjects').onclick = () => updateSelectedVisibility('projectBulk', '/admin/projects', false, loadProjects);
     $('bulkShowCloudProducts').onclick = () => updateSelectedVisibility('cloudProductBulk', '/admin/cloud-products', true, loadCloudProducts);
     $('bulkHideCloudProducts').onclick = () => updateSelectedVisibility('cloudProductBulk', '/admin/cloud-products', false, loadCloudProducts);
+    ${CREW_IMAGE_SCRIPT}
     boot();
   </script>
 </body>

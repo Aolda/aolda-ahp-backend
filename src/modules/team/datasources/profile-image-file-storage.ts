@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
-import { mkdir, rename, writeFile } from 'fs/promises';
+import { mkdir, rename, writeFile, unlink } from 'fs/promises';
 import { basename, extname, join } from 'path';
+import { downloadPublicImage, MAX_PROFILE_IMAGE_BYTES } from './public-image-download';
 
 const DEFAULT_EXTENSION = '.bin';
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 10_000;
@@ -26,24 +27,15 @@ export class ProfileImageFileStorage {
     private readonly storageDir: string,
     private readonly publicBaseUrl: string,
     private readonly downloadTimeoutMs = DEFAULT_DOWNLOAD_TIMEOUT_MS,
+    private readonly download = downloadPublicImage,
   ) {}
 
   async saveFromUrl(notionPageId: string, imageUrl: string): Promise<StoredProfileImage> {
-    const response = await fetch(imageUrl, { signal: AbortSignal.timeout(this.downloadTimeoutMs) });
-
-    if (!response.ok) {
-      throw new Error(`Failed to download profile image: ${response.status} ${response.statusText}`);
-    }
-
-    const responseContentType = this.normalizeContentType(response.headers.get('content-type'));
-    const bytes = Buffer.from(await response.arrayBuffer());
-    const detectedContentType = this.detectImageContentType(bytes);
-    const contentType =
-      detectedContentType ?? this.resolveTrustedResponseImageContentType(responseContentType);
-
-    if (!contentType) {
-      throw new Error(`Profile image response is not an image: ${responseContentType}`);
-    }
+    const bytes = await this.download(imageUrl, this.downloadTimeoutMs);
+    if (!bytes.length || bytes.length > MAX_PROFILE_IMAGE_BYTES) throw new Error('Invalid profile image size');
+    const contentType = this.detectImageContentType(bytes);
+    // SVG/XML and unrecognized response types must not execute on the administrator's origin.
+    if (!contentType || contentType === 'image/svg+xml') throw new Error('Only JPEG, PNG, WEBP, GIF or AVIF images are supported');
 
     const contentHash = createHash('sha256').update(bytes).digest('hex');
     const extension = this.resolveExtension(contentType, imageUrl);
@@ -52,8 +44,13 @@ export class ProfileImageFileStorage {
     const tmpPath = `${localPath}.tmp-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     await mkdir(this.storageDir, { recursive: true });
-    await writeFile(tmpPath, bytes, { flag: 'wx' });
-    await rename(tmpPath, localPath);
+    try {
+      await writeFile(tmpPath, bytes, { flag: 'wx' });
+      await rename(tmpPath, localPath);
+    } catch (error) {
+      await unlink(tmpPath).catch(() => undefined);
+      throw error;
+    }
 
     return {
       publicUrl: this.toPublicUrl(fileName),
@@ -62,18 +59,6 @@ export class ProfileImageFileStorage {
       contentHash,
       fileSize: bytes.length,
     };
-  }
-
-  private normalizeContentType(value: string | null): string {
-    return value?.split(';')[0]?.trim().toLowerCase() || 'application/octet-stream';
-  }
-
-  private resolveTrustedResponseImageContentType(contentType: string): string | null {
-    if (!contentType.startsWith('image/')) {
-      return null;
-    }
-
-    return contentType;
   }
 
   private detectImageContentType(bytes: Buffer): string | null {

@@ -278,7 +278,7 @@ export class TeamContentRepository implements TeamRepository {
     return {
       crewId: crew.id,
       profile: {
-        url: crew.profileImageUrl ?? DEFAULT_PROFILE_URL,
+        url: crew.profileImageCacheUrl ?? crew.profileImageUrl ?? DEFAULT_PROFILE_URL,
       },
       crewName: crew.name,
       crewLog,
@@ -311,10 +311,11 @@ export class TeamContentRepository implements TeamRepository {
     id: string;
     name: string;
     profileImageUrl: string | null;
+    profileImageCacheUrl?: string | null;
   }) {
     return {
       crewId: crew.id as never,
-      profile: { url: crew.profileImageUrl ?? DEFAULT_PROFILE_URL },
+      profile: { url: crew.profileImageCacheUrl ?? crew.profileImageUrl ?? DEFAULT_PROFILE_URL },
       crewName: crew.name,
       ...resolveCrewAcademicProfile(crew),
     };

@@ -20,6 +20,8 @@
     "admin:content:sync": "tsx src/scripts/run-notion-content-sync.ts",
     "admin:auth:smoke": "tsx src/scripts/run-admin-auth-smoke.ts",
     "crew:academic:test": "tsx --test src/scripts/crew-academic-profile.test.ts",
+    "crew:images:test": "tsx --test src/scripts/crew-image-refresh.test.ts",
+    "crew:images:integration": "tsx src/scripts/run-crew-image-integration.ts",
     "crew:academic:integration": "tsx src/scripts/run-crew-academic-profile-integration.ts",
     "http:smoke": "tsx src/scripts/run-http-smoke.ts"
   },
