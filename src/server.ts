@@ -32,6 +32,7 @@ import { TeamRepository } from './modules/team/repositories/team.repository';
 import { TeamQueryService } from './modules/team/services/team-query.service';
 import { createNotionClient } from './util/notion/client';
 import { getPrismaClient } from './util/prisma';
+import { CrewCsvImportService } from './modules/admin/services/crew-csv-import.service';
 import { registerAdminRoutes } from './routes/admin';
 import { registerAdminDashboardRoute } from './routes/admin-dashboard';
 import { registerCloudRoutes } from './routes/cloud';
@@ -216,6 +217,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await registerAdminRoutes(app, {
     adminAuthService,
     adminContentService,
+    crewCsvImportService: env.databaseUrl ? new CrewCsvImportService(getPrismaClient(), env.admin.sessionSecret) : undefined,
     notionContentSyncService,
     notionCrewTeamWriteService,
     aiBackend: env.aiBackend,

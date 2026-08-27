@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { resolveCrewIdentity } from '../crew-identity';
 import { resolveCrewAcademicProfile, type CrewAcademicProfile } from '../crew-academic-profile';
 
 import {
@@ -106,7 +107,7 @@ export class TeamContentRepository implements TeamRepository {
 
     return {
       ...this.toCrewListItem(crew),
-      crewEmail: crew.email ?? '',
+      crewEmail: resolveCrewIdentity(crew).email ?? '',
       description: crew.adminProfile?.description ?? DEFAULT_CREW_DESCRIPTION,
       activities: this.resolveCrewVisibleProjects(crew).map((project) => ({
         activityId: project.id,
@@ -273,6 +274,7 @@ export class TeamContentRepository implements TeamRepository {
   }
 
   private toCrewListItem(crew: Awaited<ReturnType<typeof this.findVisibleCrews>>[number]): CrewListItem {
+    crew = resolveCrewIdentity(crew);
     const crewLog = this.resolveCrewLog(crew);
 
     return {
@@ -310,8 +312,10 @@ export class TeamContentRepository implements TeamRepository {
   private toProjectParticipant(crew: CrewAcademicProfile & {
     id: string;
     name: string;
+    adminProfile?: { nameOverride?: string | null } | null;
     profileImageUrl: string | null;
   }) {
+    crew = resolveCrewIdentity(crew);
     return {
       crewId: crew.id as never,
       profile: { url: crew.profileImageUrl ?? DEFAULT_PROFILE_URL },

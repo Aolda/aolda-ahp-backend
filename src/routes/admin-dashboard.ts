@@ -1,3 +1,4 @@
+import { CREW_CSV_HTML, CREW_CSV_SCRIPT } from '../modules/admin/crew-csv-import-ui';
 import { FastifyInstance } from 'fastify';
 
 export async function registerAdminDashboardRoute(app: FastifyInstance): Promise<void> {
@@ -782,6 +783,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
               <button id="bulkShowCrews">선택대상 일괄공개</button>
               <button id="bulkHideCrews">선택대상 일괄비공개</button>
             </div>
+            <button id="openCrewCsv">CSV 일괄 등록</button>
             <input id="crewSearch" style="width:260px" placeholder="크루명, 참여 프로젝트명 검색" />
             <button id="refreshCrews">새로고침</button>
           </div>
@@ -897,6 +899,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       </div>
     </section>
   </main>
+  ${CREW_CSV_HTML}
   <div id="toastRoot" class="toast-root" aria-live="polite"></div>
 
   <script>
@@ -1199,6 +1202,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       const candidateProjects = state.projects.filter((project) => isCrewProjectCandidate(project, crew.id));
       const explicitProjectVisibilities = new Map(crew.projectVisibilities.map((item) => [item.projectSourceId, item.isVisible]));
       $('crewDetail').innerHTML = '<h2>' + esc(crew.name) + '</h2>'
+        + '<div class="meta">CSV 수정용 crewId: <code>' + esc(crew.id) + '</code></div>'
         + '<label class="inline"><input id="crewVisible" type="checkbox" ' + (crew.adminProfile?.isVisible ? 'checked' : '') + '> 공개 프로필 사용</label>'
         + '<label>소개글</label><textarea id="crewDescription" placeholder="' + esc(crew.notionDescription || '') + '">' + esc(crew.adminProfile?.description || '') + '</textarea>'
         + '<div class="meta">Notion 학과: ' + esc(crew.univDepartment || '미등록') + ' / 입학연도: ' + esc(crew.univJoinedYear || '미등록') + '</div>'
@@ -2077,6 +2081,7 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
     $('projectSearch').addEventListener('input', renderProjectList);
     $('cloudProductSearch').addEventListener('input', renderCloudProductList);
     $('blogSearch').addEventListener('input', renderBlogList);
+    ${CREW_CSV_SCRIPT}
     bindBulkAllCheckbox('crewBulkAll', 'crewBulk', 'crewBulkToolbar', 'crewBulkStatus');
     bindBulkAllCheckbox('projectBulkAll', 'projectBulk', 'projectBulkToolbar', 'projectBulkStatus');
     bindBulkAllCheckbox('cloudProductBulkAll', 'cloudProductBulk', 'cloudProductBulkToolbar', 'cloudProductBulkStatus');
