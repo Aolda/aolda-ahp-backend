@@ -17,6 +17,7 @@ import {
 } from '../modules/admin/services/admin-content.service';
 import { NotionContentSyncService } from '../modules/admin/services/notion-content-sync.service';
 import { NotionCrewTeamWriteService } from '../modules/admin/services/notion-crew-team-write.service';
+import { CrewImageRefreshService, ImageRefreshBusyError } from '../modules/admin/services/crew-image-refresh.service';
 
 interface AdminAiBackendConfig {
   baseUrl?: string;
@@ -25,6 +26,7 @@ interface AdminAiBackendConfig {
 }
 
 interface AdminRouteDeps {
+  crewImageRefreshService?: CrewImageRefreshService;
   adminAuthService?: AdminAuthService;
   adminContentService?: AdminContentService;
   crewCsvImportService?: CrewCsvImportService;
@@ -88,6 +90,29 @@ function registerCrewCsvRoutes(app: FastifyInstance, deps: AdminRouteDeps): void
 }
 
 export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps): Promise<void> {
+  app.post<{ Body: { crewIds: string[] } }>('/admin/crews/image-refresh', {
+    preHandler: createAdminAuthPreHandler(deps),
+    schema: { body: { type: 'object', additionalProperties: false, required: ['crewIds'], properties: {
+      crewIds: { type: 'array', minItems: 1, maxItems: 1000, uniqueItems: true, items: { type: 'string', format: 'uuid' } },
+    } } },
+  }, async (request, reply) => {
+    if (!deps.crewImageRefreshService) return reply.code(503).send({ message: 'Notion 이미지 갱신이 설정되지 않았습니다.' });
+    try {
+      const job = await deps.crewImageRefreshService.start(request.body.crewIds, (request as AuthenticatedAdminRequest).adminUser!.id);
+      return reply.code(202).send({ job });
+    } catch (error) {
+      if (error instanceof ImageRefreshBusyError) return reply.code(409).send({ message: error.message, jobId: error.jobId });
+      return reply.code(400).send({ message: '이미지 작업을 시작하지 못했습니다. 목록과 서버 상태를 확인해 주세요.' });
+    }
+  });
+  for (const suffix of ['latest', ':jobId']) {
+    app.get<{ Params: { jobId?: string } }>(`/admin/crews/image-refresh/${suffix}`, { preHandler: createAdminAuthPreHandler(deps) }, async (request, reply) => {
+      if (!deps.crewImageRefreshService) return reply.code(503).send({ message: 'Notion 이미지 갱신이 설정되지 않았습니다.' });
+      const job = await deps.crewImageRefreshService.get(request.params.jobId);
+      if (!job && suffix !== 'latest') return reply.code(404).send({ message: '작업을 찾을 수 없습니다.' });
+      return { job };
+    });
+  }
   app.post(
     '/admin/login',
     {

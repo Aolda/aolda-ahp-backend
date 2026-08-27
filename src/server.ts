@@ -34,6 +34,9 @@ import { createNotionClient } from './util/notion/client';
 import { getPrismaClient } from './util/prisma';
 import { CrewCsvImportService } from './modules/admin/services/crew-csv-import.service';
 import { registerAdminRoutes } from './routes/admin';
+import { Client as NotionClient } from '@notionhq/client';
+import { CrewImageRefreshService } from './modules/admin/services/crew-image-refresh.service';
+import { CrewImageSource } from './modules/team/notion/crew-image-source';
 import { registerAdminDashboardRoute } from './routes/admin-dashboard';
 import { registerCloudRoutes } from './routes/cloud';
 import { registerHealthRoutes } from './routes/health';
@@ -140,6 +143,7 @@ function registerProfileImageStaticRoute(app: FastifyInstance, env: AppEnv): voi
 
     const extension = fileName.slice(fileName.lastIndexOf('.')).toLowerCase();
     reply.header('cache-control', 'public, max-age=300');
+    reply.header('x-content-type-options', 'nosniff');
     reply.type(PROFILE_IMAGE_CONTENT_TYPES[extension] ?? 'application/octet-stream');
     return reply.send(createReadStream(filePath));
   });
@@ -213,8 +217,14 @@ export async function buildApp(): Promise<FastifyInstance> {
   }
 
   await registerHealthRoutes(app);
+  const crewImageRefreshService = env.databaseUrl && env.notion.apiKey && env.notion.teamDbIds.crew
+    ? new CrewImageRefreshService(getPrismaClient(), new CrewImageSource(
+      new NotionClient({ auth: env.notion.apiKey, timeoutMs: 10_000, retry: { maxRetries: 2, maxRetryDelayMs: 5000 }, logger: () => undefined }), env.notion.teamDbIds.crew),
+      new ProfileImageFileStorage(env.profileImage.storageDir, env.profileImage.publicBaseUrl))
+    : undefined;
   await registerAdminDashboardRoute(app);
   await registerAdminRoutes(app, {
+    crewImageRefreshService,
     adminAuthService,
     adminContentService,
     crewCsvImportService: env.databaseUrl ? new CrewCsvImportService(getPrismaClient(), env.admin.sessionSecret) : undefined,
@@ -277,6 +287,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   app.addHook('onClose', async () => {
+    await crewImageRefreshService?.close();
     crewProfileImageSyncJob?.stop();
 
     if (env.databaseUrl) {

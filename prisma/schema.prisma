@@ -26,6 +26,32 @@ model CrewProfileImageCache {
   updatedAt      DateTime @updatedAt
 }
 
+model CrewImageRefreshJob {
+  id String @id @default(uuid())
+  status String @default("RUNNING")
+  activeKey String? @unique
+  owner String
+  requestedBy String
+  leaseUntil DateTime
+  createdAt DateTime @default(now())
+  finishedAt DateTime?
+  items CrewImageRefreshItem[]
+  @@index([createdAt])
+}
+
+model CrewImageRefreshItem {
+  id String @id @default(uuid())
+  jobId String
+  crewId String
+  crewName String
+  notionPageId String?
+  status String @default("PENDING")
+  message String?
+  finishedAt DateTime?
+  job CrewImageRefreshJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@unique([jobId, crewId])
+}
+
 model TeamActivityMetadata {
   id           Int       @id @default(autoincrement())
   notionPageId String    @unique
@@ -59,6 +85,7 @@ model CrewSource {
   name                String
   email               String?
   profileImageUrl     String?
+  profileImageCacheUrl String?
   notionDescription   String?  @db.Text
   joinedGen           Int?
   univDepartment      String?
