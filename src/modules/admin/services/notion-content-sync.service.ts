@@ -14,6 +14,10 @@ import { ActivityFetcher } from '../../team/notion/fetchers/activity.fetcher';
 import { BlogPostFetcher } from '../../team/notion/fetchers/blog-post.fetcher';
 import { CrewFetcher } from '../../team/notion/fetchers/crew.fetcher';
 import { CrewGenerationMappingFetcher } from '../../team/notion/fetchers/crew-generation-mapping.fetcher';
+import { CrewProfileFetcher } from '../../team/notion/fetchers/crew-profile.fetcher';
+import { parseCrewProfilePage } from '../../team/notion/parsers/crew-profile-page.parser';
+import { CrewProfileMatcher } from '../../team/notion/crew-profile-matcher';
+import { normalizeAdmissionYear } from '../../team/crew-academic-profile';
 import { parseActivityMetadataSeed } from '../../team/notion/parsers/activity-metadata-seed.parser';
 import { parseActivityPage } from '../../team/notion/parsers/activity-page.parser';
 import { parseBlogPostPage } from '../../team/notion/parsers/blog-post-page.parser';
@@ -26,6 +30,7 @@ const DEFAULT_SYNC_CONCURRENCY = 6;
 
 export interface NotionContentSyncDbIds {
   crew?: string;
+  crewProfile?: string;
   activity?: string;
   study?: string;
   project?: string;
@@ -173,10 +178,15 @@ export class NotionContentSyncService {
       this.notionClient,
       DEFAULT_CREW_GENERATION_MAPPING_DATA_SOURCE_ID,
     );
-    const [crewPages, generationMap] = await Promise.all([
+    const [crewPages, generationMap, profilePages] = await Promise.all([
       crewFetcher.fetchPages(),
       this.fetchActivityTermGenerationMap(generationMappingFetcher),
+      this.dbIds.crewProfile
+        ? new CrewProfileFetcher(this.notionClient, this.dbIds.crewProfile).fetchPages()
+        : Promise.resolve([]),
     ]);
+    const profileMatcher = new CrewProfileMatcher(profilePages.map(parseCrewProfilePage));
+    let matchedProfiles = 0;
     await reportProgress?.({
       stage: 'crew',
       message: `Processing ${crewPages.length} crew pages`,
@@ -193,6 +203,9 @@ export class NotionContentSyncService {
     let processed = 0;
     await this.mapWithConcurrency(crewPages, this.syncConcurrency(), async (page) => {
       const profileAccountIds = extractProfileAccountIds(page);
+      const email = this.extractCrewEmailOrNull(page);
+      const academicProfile = profileMatcher.resolve(profileAccountIds, email);
+      if (academicProfile) matchedProfiles += 1;
       const generations = extractGenerationNumbers(page);
       const pageSource = await crewFetcher.fetchPageSource(page);
       const notionDescription = this.options.syncCrewDetails
@@ -216,10 +229,13 @@ export class NotionContentSyncService {
         primaryNotionPageId: page.id,
         profileAccountIds,
         name: extractCrewName(page),
-        email: this.extractCrewEmailOrNull(page),
+        email,
         profileImageUrl: profileImage.url,
         notionDescription,
         joinedGen: generations[0] ?? null,
+        // Missing/ambiguous profiles must not erase previously collected academic data.
+        univDepartment: academicProfile?.univDepartment?.trim() || undefined,
+        univJoinedYear: normalizeAdmissionYear(academicProfile?.univJoinedYear) ?? undefined,
         sourcePayload: page as never,
         lastSyncedAt: syncedAt,
       });
@@ -258,6 +274,10 @@ export class NotionContentSyncService {
     });
 
     summary.profileImages = profileImages;
+    await reportProgress?.({
+      stage: 'crew',
+      message: `Academic profiles matched: ${matchedProfiles}/${crewPages.length}; unmatched records retain existing values`,
+    });
     await reportProgress?.({
       stage: 'crew',
       message: `Crew sync completed: ${summary.total} total, ${summary.created} created, ${summary.updated} updated`,

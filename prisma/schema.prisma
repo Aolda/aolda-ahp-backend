@@ -61,6 +61,8 @@ model CrewSource {
   profileImageUrl     String?
   notionDescription   String?  @db.Text
   joinedGen           Int?
+  univDepartment      String?
+  univJoinedYear      String?
   sourcePayload       Json?
   sourceArchived      Boolean  @default(false)
   lastSyncedAt        DateTime
@@ -80,6 +82,8 @@ model CrewAdminProfile {
   crewSourceId String   @unique
   isVisible    Boolean  @default(false)
   description  String?  @db.Text
+  univDepartmentOverride String?
+  univJoinedYearOverride String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

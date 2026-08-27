@@ -1201,6 +1201,9 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
       $('crewDetail').innerHTML = '<h2>' + esc(crew.name) + '</h2>'
         + '<label class="inline"><input id="crewVisible" type="checkbox" ' + (crew.adminProfile?.isVisible ? 'checked' : '') + '> 공개 프로필 사용</label>'
         + '<label>소개글</label><textarea id="crewDescription" placeholder="' + esc(crew.notionDescription || '') + '">' + esc(crew.adminProfile?.description || '') + '</textarea>'
+        + '<div class="meta">Notion 학과: ' + esc(crew.univDepartment || '미등록') + ' / 입학연도: ' + esc(crew.univJoinedYear || '미등록') + '</div>'
+        + '<label>학과 수정값 (비우면 Notion 값 사용)</label><input id="crewDepartmentOverride" value="' + esc(crew.adminProfile?.univDepartmentOverride || '') + '">'
+        + '<label>입학연도 수정값 (예: 2021, 비우면 Notion 값 사용)</label><input id="crewYearOverride" value="' + esc(crew.adminProfile?.univJoinedYearOverride || '') + '">'
         + '<div class="toolbar"><button id="saveCrew" class="primary">프로필 저장</button></div>'
         + '<h3>기수별 팀</h3><div class="meta">각 행은 Notion crewbook의 작성기수 기준입니다. 저장 시 Notion 팀 값도 함께 갱신됩니다.</div>'
         + '<div id="crewTermTeams" style="margin-top:12px">' + (termTeams.length ? termTeams.map(termTeamRowHtml).join('') : emptyHtml('기수별 팀 정보가 없습니다.')) + '</div>'
@@ -1211,7 +1214,12 @@ const ADMIN_DASHBOARD_HTML = String.raw`<!doctype html>
         + '<h3>공개 블로그</h3><div class="meta">작성자로 연결된 블로그만 프로젝트별로 표시됩니다.</div><div id="crewBlogs">' + crewBlogGroupsHtml(crew, visibleBlogIds) + '</div>'
         + '<div class="toolbar"><button id="saveCrewBlogs" class="primary">블로그 공개 저장</button></div>';
       $('saveCrew').onclick = async () => {
-        await api('/admin/crews/' + id, { method: 'PATCH', body: JSON.stringify({ isVisible: $('crewVisible').checked, description: $('crewDescription').value }) });
+        await api('/admin/crews/' + id, { method: 'PATCH', body: JSON.stringify({
+          isVisible: $('crewVisible').checked,
+          description: $('crewDescription').value,
+          univDepartmentOverride: emptyToNull($('crewDepartmentOverride').value),
+          univJoinedYearOverride: emptyToNull($('crewYearOverride').value),
+        }) });
         notify('크루 프로필 저장 완료', crew.name);
         await loadCrews();
       };

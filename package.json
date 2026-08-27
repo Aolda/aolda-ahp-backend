@@ -19,6 +19,8 @@
     "team:profile-image:sync": "tsx src/scripts/run-crew-profile-image-sync.ts",
     "admin:content:sync": "tsx src/scripts/run-notion-content-sync.ts",
     "admin:auth:smoke": "tsx src/scripts/run-admin-auth-smoke.ts",
+    "crew:academic:test": "tsx --test src/scripts/crew-academic-profile.test.ts",
+    "crew:academic:integration": "tsx src/scripts/run-crew-academic-profile-integration.ts",
     "http:smoke": "tsx src/scripts/run-http-smoke.ts"
   },
   "dependencies": {

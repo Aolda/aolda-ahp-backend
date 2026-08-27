@@ -9,6 +9,8 @@ export interface CrewSourceUpsertInput {
   profileImageUrl: string | null;
   notionDescription: string | null;
   joinedGen: number | null;
+  univDepartment?: string;
+  univJoinedYear?: string;
   sourcePayload: Prisma.InputJsonValue;
   lastSyncedAt: Date;
 }
@@ -203,6 +205,8 @@ export class ContentSourceRepository {
         profileImageUrl: input.profileImageUrl,
         notionDescription: input.notionDescription ?? undefined,
         joinedGen: input.joinedGen,
+        univDepartment: input.univDepartment,
+        univJoinedYear: input.univJoinedYear,
         sourcePayload: input.sourcePayload,
         sourceArchived: false,
         lastSyncedAt: input.lastSyncedAt,
