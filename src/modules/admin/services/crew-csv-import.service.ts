@@ -6,6 +6,7 @@ export const CSV_TEMPLATE = '\uFEFF' + CSV_COLUMNS.join(',') + '\r\n';
 export const CSV_MAX_BYTES = 512 * 1024;
 const UUID = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
 export type ImportMode = 'create' | 'update';
+export class CrewCsvValidationError extends Error {}
 type Row = Partial<Record<typeof CSV_COLUMNS[number], string>>;
 export type ExistingCrew = {
   id: string; name: string; email: string | null; primaryNotionPageId: string | null;
@@ -17,8 +18,8 @@ export type PlannedRow = { row: number; values: Row; targetId?: string; errors: 
 
 // RFC 4180-style quoting, CRLF/LF and UTF-8 BOM. Reject malformed records instead of guessing.
 export function parseCrewCsv(csv: string): Row[] {
-  if (typeof csv !== 'string' || Buffer.byteLength(csv, 'utf8') > CSV_MAX_BYTES) throw new Error('CSV는 UTF-8, 최대 512KB여야 합니다.');
-  if (csv.includes('\uFFFD') || csv.includes('\0')) throw new Error('UTF-8 CSV로 저장해 주세요.');
+  if (typeof csv !== 'string' || Buffer.byteLength(csv, 'utf8') > CSV_MAX_BYTES) throw new CrewCsvValidationError('CSV는 UTF-8, 최대 512KB여야 합니다.');
+  if (csv.includes('\uFFFD') || csv.includes('\0')) throw new CrewCsvValidationError('UTF-8 CSV로 저장해 주세요.');
   const text = csv.replace(/^\uFEFF/, '');
   const records: string[][] = [];
   let record: string[] = [], cell = '', quoted = false, closed = false;
@@ -34,25 +35,25 @@ export function parseCrewCsv(csv: string): Row[] {
     else if (char === '\r' || char === '\n') { if (char === '\r' && text[i + 1] === '\n') i++; endRecord(); }
     else if (char === '"' && !cell && !closed) quoted = true;
     else {
-      if (closed || char === '"') throw new Error('CSV 따옴표 형식이 올바르지 않습니다.');
+      if (closed || char === '"') throw new CrewCsvValidationError('CSV 따옴표 형식이 올바르지 않습니다.');
       cell += char;
     }
   }
-  if (quoted) throw new Error('닫히지 않은 CSV 따옴표가 있습니다.');
+  if (quoted) throw new CrewCsvValidationError('닫히지 않은 CSV 따옴표가 있습니다.');
   if (cell || closed || record.length) endRecord();
   const header = records.shift();
   if (!header || new Set(header).size !== header.length || header.some((x) => !(CSV_COLUMNS as readonly string[]).includes(x))) {
-    throw new Error('CSV 양식의 열 이름을 사용해 주세요. 중복/알 수 없는 열은 허용하지 않습니다.');
+    throw new CrewCsvValidationError('CSV 양식의 열 이름을 사용해 주세요. 중복/알 수 없는 열은 허용하지 않습니다.');
   }
-  if (!records.length || records.length > 1000) throw new Error('한 번에 1~1000행을 업로드해 주세요.');
+  if (!records.length || records.length > 1000) throw new CrewCsvValidationError('한 번에 1~1000행을 업로드해 주세요.');
   return records.map((cells, index) => {
-    if (cells.length !== header.length) throw new Error(`${index + 2}행의 열 수가 양식과 다릅니다.`);
+    if (cells.length !== header.length) throw new CrewCsvValidationError(`${index + 2}행의 열 수가 양식과 다릅니다.`);
     return Object.fromEntries(header.map((key, i) => [key, cells[i] || undefined]));
   });
 }
 
 export function planCrewImport(csv: string, mode: ImportMode, existing: ExistingCrew[]): PlannedRow[] {
-  if (mode !== 'create' && mode !== 'update') throw new Error('등록 모드를 선택해 주세요.');
+  if (mode !== 'create' && mode !== 'update') throw new CrewCsvValidationError('등록 모드를 선택해 주세요.');
   const seenIds = new Set<string>(), seenEmails = new Set<string>(), seenPages = new Set<string>();
   return parseCrewCsv(csv).map((values, index) => {
     const errors: string[] = [];
@@ -117,18 +118,18 @@ export class CrewCsvImportService {
   }
 
   async commit(csv: string, mode: ImportMode, actor: string, token: string) {
-    if (typeof token !== 'string' || !/^\d{13}\.[\da-f]{64}$/.test(token)) throw new Error('미리보기를 먼저 확인해 주세요.');
+    if (typeof token !== 'string' || !/^\d{13}\.[\da-f]{64}$/.test(token)) throw new CrewCsvValidationError('미리보기를 먼저 확인해 주세요.');
     const [expiration, signature] = token.split('.');
     const expires = Number(expiration);
-    if (Date.now() > expires) throw new Error('미리보기가 만료되었습니다. 다시 확인해 주세요.');
+    if (Date.now() > expires) throw new CrewCsvValidationError('미리보기가 만료되었습니다. 다시 확인해 주세요.');
     return this.prisma.$transaction(async (tx) => {
       // Serializes imports; Serializable also detects overlapping Notion/admin writes.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(7342101)`;
       const existing = await this.snapshot(tx);
       const expected = this.signature(csv, mode, actor, expires, existing);
-      if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new Error('CSV 또는 크루 정보가 변경되었습니다. 미리보기를 다시 확인해 주세요.');
+      if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) throw new CrewCsvValidationError('CSV 또는 크루 정보가 변경되었습니다. 미리보기를 다시 확인해 주세요.');
       const rows = planCrewImport(csv, mode, existing);
-      if (rows.some((x) => x.errors.length)) throw new Error('CSV 검증 오류가 있습니다.');
+      if (rows.some((x) => x.errors.length)) throw new CrewCsvValidationError('CSV 검증 오류가 있습니다.');
       for (const { values: v, targetId } of rows) {
         const overrides = {
           nameOverride: v.name, emailOverride: v.email,

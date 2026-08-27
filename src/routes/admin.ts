@@ -1,4 +1,4 @@
-import { CrewCsvImportService, CSV_TEMPLATE, type ImportMode } from '../modules/admin/services/crew-csv-import.service';
+import { CrewCsvImportService, CrewCsvValidationError, CSV_TEMPLATE, type ImportMode } from '../modules/admin/services/crew-csv-import.service';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { AdminAuthService, type AdminSessionUser } from '../modules/admin/services/admin-auth.service';
@@ -81,8 +81,7 @@ function registerCrewCsvRoutes(app: FastifyInstance, deps: AdminRouteDeps): void
           : await deps.crewCsvImportService.commit(csv, mode, actor, token ?? '') };
       } catch (error) {
         // Never echo DB errors (which may contain private row values).
-        const known = error instanceof Error && !('code' in error);
-        return reply.code(400).send({ message: known ? error.message : '저장 충돌이 발생했습니다. 변경 내용은 취소되었습니다. 미리보기를 다시 확인해 주세요.' });
+        return reply.code(400).send({ message: error instanceof CrewCsvValidationError ? error.message : '저장 오류 또는 충돌이 발생했습니다. 미리보기를 다시 확인해 주세요.' });
       }
     });
   }
