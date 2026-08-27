@@ -1,3 +1,4 @@
+import { CrewCsvImportService, CrewCsvValidationError, CSV_TEMPLATE, type ImportMode } from '../modules/admin/services/crew-csv-import.service';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import { AdminAuthService, type AdminSessionUser } from '../modules/admin/services/admin-auth.service';
@@ -26,6 +27,7 @@ interface AdminAiBackendConfig {
 interface AdminRouteDeps {
   adminAuthService?: AdminAuthService;
   adminContentService?: AdminContentService;
+  crewCsvImportService?: CrewCsvImportService;
   notionContentSyncService?: NotionContentSyncService;
   notionCrewTeamWriteService?: NotionCrewTeamWriteService;
   aiBackend?: AdminAiBackendConfig;
@@ -59,6 +61,31 @@ type BlogDraftJob = {
 const DEFAULT_BLOG_PROMPT =
   'Aolda 프로젝트 기록을 바탕으로 외부 공개용 블로그 초안을 작성하세요. 독자가 맥락을 쉽게 이해하도록 문제, 접근, 결과, 배운 점을 명확히 정리하세요.';
 const blogPublishStates = new Map<string, BlogPublishState>();
+
+function registerCrewCsvRoutes(app: FastifyInstance, deps: AdminRouteDeps): void {
+  app.get('/admin/crews/import/template', { preHandler: createAdminAuthPreHandler(deps) }, async (_request, reply) =>
+    reply.type('text/csv; charset=utf-8').header('content-disposition', 'attachment; filename="crew-template.csv"').send(CSV_TEMPLATE));
+  for (const action of ['preview', 'commit'] as const) {
+    app.post<{ Body: { csv: string; mode: ImportMode; token?: string } }>(`/admin/crews/import/${action}`, {
+      preHandler: createAdminAuthPreHandler(deps), bodyLimit: 4 * 1024 * 1024,
+      schema: { body: { type: 'object', additionalProperties: false, required: ['csv', 'mode'], properties: {
+        csv: { type: 'string', maxLength: 524288 }, mode: { type: 'string', enum: ['create', 'update'] }, token: { type: 'string', maxLength: 100 },
+      } } },
+    }, async (request, reply) => {
+      if (!deps.crewCsvImportService) return reply.code(503).send({ message: 'CSV import is not configured' });
+      const actor = (request as AuthenticatedAdminRequest).adminUser!.id;
+      try {
+        const { csv, mode, token } = request.body;
+        return { data: action === 'preview'
+          ? await deps.crewCsvImportService.preview(csv, mode, actor)
+          : await deps.crewCsvImportService.commit(csv, mode, actor, token ?? '') };
+      } catch (error) {
+        // Never echo DB errors (which may contain private row values).
+        return reply.code(400).send({ message: error instanceof CrewCsvValidationError ? error.message : '저장 오류 또는 충돌이 발생했습니다. 미리보기를 다시 확인해 주세요.' });
+      }
+    });
+  }
+}
 
 export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRouteDeps): Promise<void> {
   app.post(
@@ -107,6 +134,7 @@ export async function registerAdminRoutes(app: FastifyInstance, deps: AdminRoute
     async (request: AuthenticatedAdminRequest) => ({ user: request.adminUser }),
   );
 
+  registerCrewCsvRoutes(app, deps);
   app.get(
     '/admin/activity-terms',
     {

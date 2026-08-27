@@ -84,6 +84,9 @@ model CrewAdminProfile {
   description  String?  @db.Text
   univDepartmentOverride String?
   univJoinedYearOverride String?
+  nameOverride String?
+  emailOverride String?
+  joinedGenOverride Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

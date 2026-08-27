@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { normalizeAdmissionYear } from '../../team/crew-academic-profile';
+import { resolveCrewIdentity } from '../../team/crew-identity';
 
 export interface UpdateCrewAdminInput {
   isVisible?: boolean;
@@ -190,7 +191,7 @@ export class AdminContentService {
   }
 
   async listCrews() {
-    return this.prisma.crewSource.findMany({
+    const crews = await this.prisma.crewSource.findMany({
       orderBy: [{ sourceArchived: 'asc' }, { name: 'asc' }],
       include: {
         adminProfile: true,
@@ -198,10 +199,11 @@ export class AdminContentService {
         termTeamOverrides: { orderBy: { generation: 'asc' } },
       },
     });
+    return crews.map(resolveCrewIdentity);
   }
 
   async getCrew(crewSourceId: string) {
-    return this.prisma.crewSource.findUnique({
+    const crew = await this.prisma.crewSource.findUnique({
       where: { id: crewSourceId },
       include: {
         adminProfile: true,
@@ -217,6 +219,7 @@ export class AdminContentService {
         },
       },
     });
+    return crew ? resolveCrewIdentity(crew) : null;
   }
 
   async updateCrew(crewSourceId: string, input: UpdateCrewAdminInput) {

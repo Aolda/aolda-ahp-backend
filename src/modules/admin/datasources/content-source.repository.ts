@@ -181,13 +181,15 @@ export class ContentSourceRepository {
   }
 
   async upsertCrewSource(input: CrewSourceUpsertInput): Promise<{ id: string; created: boolean }> {
-    const existing = await this.prisma.crewSource.findUnique({
-      where: { sourceKey: input.sourceKey },
-      select: { id: true },
+    const matches = await this.prisma.crewSource.findMany({
+      where: { OR: [{ sourceKey: input.sourceKey }, { primaryNotionPageId: input.primaryNotionPageId }] },
+      select: { id: true, sourceKey: true },
     });
+    if (matches.length > 1) throw new Error('Crew identity conflict: explicit administrator resolution required');
+    const existing = matches[0];
 
     const row = await this.prisma.crewSource.upsert({
-      where: { sourceKey: input.sourceKey },
+      where: { sourceKey: existing?.sourceKey ?? input.sourceKey },
       create: {
         ...input,
         sourceArchived: false,
@@ -198,6 +200,7 @@ export class ContentSourceRepository {
         },
       },
       update: {
+        sourceKey: input.sourceKey,
         primaryNotionPageId: input.primaryNotionPageId,
         profileAccountIds: input.profileAccountIds,
         name: input.name,
