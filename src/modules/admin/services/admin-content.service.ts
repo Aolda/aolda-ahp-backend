@@ -1,8 +1,11 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
+import { normalizeAdmissionYear } from '../../team/crew-academic-profile';
 
 export interface UpdateCrewAdminInput {
   isVisible?: boolean;
   description?: string | null;
+  univDepartmentOverride?: string | null;
+  univJoinedYearOverride?: string | null;
 }
 
 export interface UpdateCrewTermTeamInput {
@@ -217,6 +220,19 @@ export class AdminContentService {
   }
 
   async updateCrew(crewSourceId: string, input: UpdateCrewAdminInput) {
+    const rawYear = input.univJoinedYearOverride;
+    const year = rawYear === undefined ? undefined : normalizeAdmissionYear(rawYear);
+    if (rawYear != null && rawYear !== '' && !year) {
+      throw new Error('Invalid admission year: use a two/four-digit year or nine-digit student ID');
+    }
+    if (input.univDepartmentOverride != null && typeof input.univDepartmentOverride !== 'string') {
+      throw new Error('Invalid department');
+    }
+    const academicOverrides = {
+      univDepartmentOverride: input.univDepartmentOverride === undefined
+        ? undefined : input.univDepartmentOverride?.trim() || null,
+      univJoinedYearOverride: year,
+    };
     await this.ensureCrewExists(crewSourceId);
     return this.prisma.crewAdminProfile.upsert({
       where: { crewSourceId },
@@ -224,10 +240,12 @@ export class AdminContentService {
         crewSourceId,
         isVisible: input.isVisible ?? false,
         description: input.description,
+        ...academicOverrides,
       },
       update: this.omitUndefined({
         isVisible: input.isVisible,
         description: input.description,
+        ...academicOverrides,
       }),
     });
   }

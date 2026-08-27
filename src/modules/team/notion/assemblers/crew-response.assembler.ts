@@ -1,4 +1,5 @@
 import type { CrewDetailResponse, CrewListResponse } from '../../repositories/team.repository';
+import { normalizeAdmissionYear } from '../../crew-academic-profile';
 import {
   CREW_DEPARTMENT_KEY_VALUES,
   CREW_TYPE_KEY_VALUES,
@@ -70,17 +71,12 @@ function assembleCrewListItem(crew: CrewListAggregate): CrewListItem {
     isActive: crew.isActive,
     joinedGen: crew.joinedGen,
     univDepartment: crew.profileSupplement?.univDepartment ?? extractUnivDepartment(crew.source.page),
-    univJoinedYear: normalizeUnivJoinedYear(
+    univJoinedYear: normalizeAdmissionYear(
       crew.profileSupplement?.univJoinedYear ?? extractUnivJoinedYear(crew.source.page),
-    ),
+    ) ?? '',
     totalActivities: crew.totalActivities,
     totalBloggings: crew.totalBloggings,
   };
-}
-
-function normalizeUnivJoinedYear(value: string): string {
-  const digits = value.replace(/[^0-9]/g, '');
-  return digits.length >= 4 ? digits.slice(0, 4) : '0000';
 }
 
 function collectCrewListKeys(data: CrewListResponse['data']): CrewListResponse['keys'] {

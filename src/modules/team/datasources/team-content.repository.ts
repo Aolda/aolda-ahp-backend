@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@prisma/client';
+import { resolveCrewAcademicProfile, type CrewAcademicProfile } from '../crew-academic-profile';
 
 import {
   PROJECT_DETAIL_EXAMPLE,
@@ -283,8 +284,7 @@ export class TeamContentRepository implements TeamRepository {
       crewLog,
       isActive: true,
       joinedGen: crew.joinedGen ?? crewLog[0]?.generation ?? 0,
-      univDepartment: '',
-      univJoinedYear: '0000',
+      ...resolveCrewAcademicProfile(crew),
       totalActivities: this.resolveCrewVisibleProjects(crew).length,
       totalBloggings: crew.blogVisibilities.length,
     };
@@ -307,7 +307,7 @@ export class TeamContentRepository implements TeamRepository {
     };
   }
 
-  private toProjectParticipant(crew: {
+  private toProjectParticipant(crew: CrewAcademicProfile & {
     id: string;
     name: string;
     profileImageUrl: string | null;
@@ -316,8 +316,7 @@ export class TeamContentRepository implements TeamRepository {
       crewId: crew.id as never,
       profile: { url: crew.profileImageUrl ?? DEFAULT_PROFILE_URL },
       crewName: crew.name,
-      univDepartment: '',
-      univJoinedYear: '0000',
+      ...resolveCrewAcademicProfile(crew),
     };
   }
 
